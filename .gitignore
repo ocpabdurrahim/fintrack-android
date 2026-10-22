@@ -17,3 +17,11 @@ keystore.properties
 
 # Downloaded APKs
 /dist/
+
+# Web app
+/web/node_modules/
+/web/dist/
+
+# Firebase CLI
+/.firebase/
+*-debug.log

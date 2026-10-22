@@ -33,12 +33,12 @@ object DemoData {
         suspend fun add(
             type: TxnType,
             category: String?,
-            account: Long,
+            account: String,
             taka: Int,
             date: LocalDate,
             hour: Int,
             note: String = "",
-            to: Long? = null,
+            to: String? = null,
         ) {
             repo.saveTransaction(
                 TransactionEntity(

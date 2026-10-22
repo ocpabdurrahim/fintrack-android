@@ -344,7 +344,7 @@ private fun TodayCard(state: HomeState, onBudgets: () -> Unit) {
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        "-" + money.format(state.todayExpense),
+                        (if (state.todayExpense > 0) "-" else "") + money.format(state.todayExpense),
                         style = MaterialTheme.typography.titleMedium,
                         color = colors.expense,
                         modifier = Modifier.testTag("today_expense"),
