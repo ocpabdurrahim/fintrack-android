@@ -236,6 +236,14 @@ a { color: var(--primary); }
 .amount-input .sym { font-size: 28px; font-weight: 700; }
 .amount-input input { border: 0; outline: none; background: transparent; font-size: 32px; font-weight: 700; width: 100%; min-width: 0; padding: 6px 0; }
 
+select.input { cursor: pointer; }
+.transfer-row { display: flex; align-items: flex-end; gap: 8px; }
+.transfer-row .swap { flex: none; margin-bottom: 2px; }
+@media (max-width: 600px) {
+  .transfer-row { flex-direction: column; align-items: stretch; }
+  .transfer-row .swap { align-self: center; transform: rotate(90deg); margin: 0; }
+}
+
 .search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); background: var(--card); border-radius: 999px; padding: 6px 8px 6px 14px; }
 .search input { border: 0; outline: none; background: transparent; flex: 1; min-width: 0; padding: 4px 0; }
 

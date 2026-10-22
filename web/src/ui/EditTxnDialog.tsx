@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { nextSortOrder, saveTransaction } from '../data/actions'
+import { accountBalances, nextSortOrder, saveTransaction } from '../data/actions'
 import { cssColor } from '../data/defaults'
 import { newId } from '../data/ids'
 import { store, useData } from '../data/store'
@@ -79,15 +79,21 @@ export function EditTxnDialog({ request, onClose }: { request: EditorRequest; on
     setNewCategory(false)
   }
 
-  const accountChips = (selected: string | null, onPick: (id: string) => void) => (
-    <div className="chips">
-      {accounts.map(a => (
-        <button key={a.id} className={`chip ${a.id === selected ? 'on' : ''}`} onClick={() => onPick(a.id)}>
-          {a.emoji}&nbsp; {a.name}
-        </button>
-      ))}
-    </div>
+  const balances = useMemo(() => accountBalances(data.accounts, data.transactions), [data.accounts, data.transactions])
+
+  // Accounts are picked from drop-down lists that show each balance.
+  const accountSelect = (label: string, value: string | null, onPick: (id: string) => void) => (
+    <label className="field grow">
+      <span>{label}</span>
+      <select className="input" value={value ?? ''} onChange={e => { onPick(e.target.value); setError(null) }}>
+        <option value="" disabled>Choose an account</option>
+        {accounts.map(a => (
+          <option key={a.id} value={a.id}>{a.emoji}  {a.name} · {money.format(balances.get(a.id) ?? 0)}</option>
+        ))}
+      </select>
+    </label>
   )
+
 
   return (
     <Modal onClose={onClose} sheet label={original ? 'Edit transaction' : 'New transaction'}>
@@ -113,10 +119,14 @@ export function EditTxnDialog({ request, onClose }: { request: EditorRequest; on
         </div>
 
         {type === 'TRANSFER' ? (
-          <>
-            <div className="field"><span>From</span>{accountChips(accountId, setAccountId)}</div>
-            <div className="field"><span>To</span>{accountChips(toAccountId, setToAccountId)}</div>
-          </>
+          <div className="transfer-row">
+            {accountSelect('From', accountId, setAccountId)}
+            <button type="button" className="icon-btn swap" aria-label="Swap From and To" title="Swap"
+              onClick={() => { setAccountId(toAccountId); setToAccountId(accountId) }}>
+              <Icon name="swap" />
+            </button>
+            {accountSelect('To', toAccountId, setToAccountId)}
+          </div>
         ) : (
           <>
             <div className="field">
@@ -138,7 +148,7 @@ export function EditTxnDialog({ request, onClose }: { request: EditorRequest; on
                 </button>
               </div>
             </div>
-            <div className="field"><span>{type === 'INCOME' ? 'Received in' : 'Paid from'}</span>{accountChips(accountId, setAccountId)}</div>
+            {accountSelect(type === 'INCOME' ? 'Received in' : 'Paid from', accountId, setAccountId)}
           </>
         )}
 
