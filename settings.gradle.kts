@@ -20,5 +20,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Fin"
+rootProject.name = "FinTrack"
 include(":app")

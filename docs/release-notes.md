@@ -1,6 +1,6 @@
-Fin is a daily income and expense tracker for Android. It works fully offline: your records stay on your phone.
+FinTrack is a daily income and expense tracker for Android. It works fully offline: your records stay on your phone.
 
-**Install:** download `Fin-1.0.0.apk` below on your phone, open it, and allow "Install unknown apps" for your browser or file manager when Android asks. Needs Android 8.0 or newer.
+**Install:** download `FinTrack-1.0.0.apk` below on your phone, open it, and allow "Install unknown apps" for your browser or file manager when Android asks. Needs Android 8.0 or newer.
 
 ### What's in 1.0.0
 - Record income, expenses and transfers between accounts in a few taps

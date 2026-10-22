@@ -1,37 +1,44 @@
-"""Print the centre "x y" of the first node in a uiautomator dump that matches.
+"""Look up a node in a uiautomator dump.
 
-Usage: find_node.py ui.xml LABEL [--contains]
+Usage:
+  find_node.py ui.xml TAG --id        centre "x y" of the node with that test tag
+  find_node.py ui.xml TAG --text-of   text of the node with that test tag
+  find_node.py ui.xml TEXT            centre of the first node showing TEXT
 
-Compose merges a button's texts into one node ("🍔, Food"), so an exact match
-also accepts LABEL as one of the comma-separated parts.
+The app exposes its Compose test tags as resource ids (testTagsAsResourceId),
+which is what --id and --text-of match.
 """
 import re
 import sys
 import xml.etree.ElementTree as ET
 
 
-def matches(value, label, contains):
-    if not value:
-        return False
-    if contains:
-        return label in value
-    return value == label or label in [part.strip() for part in value.split(",")]
+def centre(node):
+    m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+    if not m:
+        return None
+    x1, y1, x2, y2 = map(int, m.groups())
+    return f"{(x1 + x2) // 2} {(y1 + y2) // 2}"
 
 
 def main():
-    path, label = sys.argv[1], sys.argv[2]
-    contains = len(sys.argv) > 3 and sys.argv[3] == "--contains"
+    sys.stdout.reconfigure(encoding="utf-8")
+    path, key = sys.argv[1], sys.argv[2]
+    mode = sys.argv[3] if len(sys.argv) > 3 else "--text"
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError):
         return
     for node in root.iter("node"):
-        if matches(node.get("text"), label, contains) or matches(node.get("content-desc"), label, contains):
-            m = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
-            if m:
-                x1, y1, x2, y2 = map(int, m.groups())
-                print((x1 + x2) // 2, (y1 + y2) // 2)
+        rid = node.get("resource-id", "")
+        text = node.get("text", "")
+        if mode in ("--id", "--text-of"):
+            if rid == key or rid.endswith(":id/" + key):
+                print(text if mode == "--text-of" else centre(node))
                 return
+        elif text == key or node.get("content-desc") == key:
+            print(centre(node))
+            return
 
 
 main()

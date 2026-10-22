@@ -5,7 +5,7 @@
 #      uiautomator, to catch anything R8 shrinking broke.
 set -uo pipefail
 
-APP=io.github.ocpabdurrahim.fin
+APP=io.github.ocpabdurrahim.fintrack
 DEBUG_APP=$APP.debug
 OUT=emulator-out
 mkdir -p "$OUT/screens" "$OUT/release"
@@ -39,11 +39,12 @@ dump() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
   adb pull /sdcard/ui.xml "$OUT/release/ui.xml" > /dev/null 2>&1
 }
+# Taps the element with the given Compose test tag (exposed as a resource id).
 tap() {
   dump
   local xy
-  xy=$(python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "$1")
-  if [ -z "$xy" ]; then
+  xy=$(python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "$1" --id)
+  if [ -z "$xy" ] || [ "$xy" = "None" ]; then
     echo "::error::'$1' was not found on screen"
     cp "$OUT/release/ui.xml" "$OUT/release/missing-$1.xml"
     return 1
@@ -51,6 +52,10 @@ tap() {
   # shellcheck disable=SC2086
   adb shell input tap $xy
   sleep 2
+}
+text_of() {
+  dump
+  python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "$1" --text-of
 }
 check() {
   if ! alive; then
@@ -65,26 +70,27 @@ shot 01_home
 check "launch"
 
 n=2
-for label in History Stats Budgets More Home; do
-  tap "$label" || status=1
-  shot "0${n}_${label}"
-  check "$label"
+for tab in transactions stats budgets more home; do
+  tap "nav_$tab" || status=1
+  shot "0${n}_${tab}"
+  check "$tab"
   n=$((n + 1))
 done
 
-tap Add || status=1
+tap fab_add || status=1
 adb shell input text 250
 sleep 1
-tap Food || status=1
-tap Save || status=1
+tap cat_Food || status=1
+tap save_button || status=1
 sleep 2
 shot 08_after_adding
-dump
-if [ -z "$(python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "250" --contains)" ]; then
-  echo "::error::The new expense did not show up on the home screen"
+check "adding an expense"
+balance=$(text_of balance_total)
+echo "Balance after adding a 250 expense: $balance"
+if [ "$balance" != "-৳250" ]; then
+  echo "::error::Expected the balance to read -৳250, got '$balance'"
   status=1
 fi
-check "adding an expense"
 
 if adb logcat -d -b crash | grep -q "$APP"; then
   echo "::error::The release build crashed"

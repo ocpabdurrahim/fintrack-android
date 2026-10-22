@@ -1,6 +1,6 @@
-# Fin
+# FinTrack
 
-A daily income and expense tracker for Android. Record what comes in and what goes out in a few taps, and see where the money went. Fin works fully offline: there is no account and no server, and the app has no internet permission. Your records stay on your phone.
+A daily income and expense tracker for Android. Record what comes in and what goes out in a few taps, and see where the money went. FinTrack works fully offline: there is no account and no server, and the app has no internet permission. Your records stay on your phone.
 
 **[Download the latest APK](../../releases/latest)** · Android 8.0 or newer
 

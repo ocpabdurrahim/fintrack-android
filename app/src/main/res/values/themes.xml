@@ -2,7 +2,7 @@
 <resources>
     <!-- The UI is all Compose; this platform theme only paints the window
          before the first frame. -->
-    <style name="Theme.Fin" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.FinTrack" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:windowBackground">@color/fin_window</item>
     </style>
 </resources>

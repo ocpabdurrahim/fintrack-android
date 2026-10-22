@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.Fin" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.FinTrack" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/fin_window</item>
     </style>
 </resources>

@@ -16,11 +16,11 @@ val releaseKeystore: File? = System.getenv("FIN_KEYSTORE_FILE")
     ?.takeIf { it.exists() }
 
 android {
-    namespace = "io.github.ocpabdurrahim.fin"
+    namespace = "io.github.ocpabdurrahim.fintrack"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.github.ocpabdurrahim.fin"
+        applicationId = "io.github.ocpabdurrahim.fintrack"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -76,6 +76,7 @@ kotlin {
         jvmTarget.set(JvmTarget.JVM_17)
         freeCompilerArgs.addAll(
             "-opt-in=androidx.compose.material3.ExperimentalMaterial3Api",
+            "-opt-in=androidx.compose.ui.ExperimentalComposeUiApi",
             "-opt-in=androidx.compose.foundation.layout.ExperimentalLayoutApi",
             "-opt-in=androidx.compose.foundation.ExperimentalFoundationApi",
             "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",

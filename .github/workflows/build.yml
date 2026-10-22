@@ -53,14 +53,14 @@ jobs:
         run: |
           version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk "dist/Fin-$version.apk"
+          cp app/build/outputs/apk/release/app-release.apk "dist/FinTrack-$version.apk"
           ls -l dist
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
           "$apksigner" verify --print-certs dist/*.apk | head -n 3
 
       - uses: actions/upload-artifact@v4
         with:
-          name: Fin-apk
+          name: FinTrack-apk
           path: dist/*.apk
           if-no-files-found: error
 
@@ -128,7 +128,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: Fin-apk
+          name: FinTrack-apk
           path: dist
 
       - name: Create the release
@@ -136,5 +136,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*.apk \
-            --title "Fin $GITHUB_REF_NAME" \
+            --title "FinTrack $GITHUB_REF_NAME" \
             --notes-file docs/release-notes.md
