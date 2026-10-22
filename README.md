@@ -2,7 +2,15 @@
 
 A daily income and expense tracker for Android. Record what comes in and what goes out in a few taps, and see where the money went. FinTrack works fully offline: there is no account and no server, and the app has no internet permission. Your records stay on your phone.
 
-**[Download the latest APK](../../releases/latest)** · Android 8.0 or newer
+**[Download the latest APK](https://github.com/ocpabdurrahim/fintrack-android/releases/latest)** · Android 8.0 or newer
+
+| Home | Add | Statistics |
+|---|---|---|
+| <img src="docs/screenshots/home.png" width="240" alt="Home screen"> | <img src="docs/screenshots/add.png" width="240" alt="Adding an expense"> | <img src="docs/screenshots/stats.png" width="240" alt="Statistics"> |
+| **History** | **Budgets** | **Dark theme** |
+| <img src="docs/screenshots/history.png" width="240" alt="History"> | <img src="docs/screenshots/budgets.png" width="240" alt="Budgets"> | <img src="docs/screenshots/home-dark.png" width="240" alt="Home in dark theme"> |
+
+*The screenshots are taken automatically by CI on an Android 14 emulator, using sample data.*
 
 ## Features
 
