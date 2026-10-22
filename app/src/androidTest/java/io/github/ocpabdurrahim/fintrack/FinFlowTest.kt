@@ -83,7 +83,8 @@ class FinFlowTest {
         compose.onNodeWithTag("fab_add").performClick()
         compose.waitForTag("save_button")
         compose.onNodeWithTag("save_button").performClick()
-        compose.onNodeWithTag("form_error").assertIsDisplayed()
+        // The keyboard may still be sliding up and moving the bottom bar; wait for it to settle.
+        compose.waitUntil(10_000) { runCatching { compose.onNodeWithTag("form_error").assertIsDisplayed() }.isSuccess }
         compose.onNodeWithText("Enter an amount above zero").assertIsDisplayed()
     }
 
