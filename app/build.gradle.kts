@@ -12,8 +12,8 @@ plugins {
 // repository secrets. Without them a release build falls back to the debug key:
 // it still installs, but it cannot update an APK signed with the real key.
 // The app's version: bump both for every release, then tag vX.Y.Z to publish it.
-val appVersionCode = 3
-val appVersionName = "1.1.0"
+val appVersionCode = 4
+val appVersionName = "1.1.1"
 
 // Where the app looks for updates (its GitHub releases).
 val updateApiUrl = "https://api.github.com/repos/ocpabdurrahim/fintrack-android/releases/latest"

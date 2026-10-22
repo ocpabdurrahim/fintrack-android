@@ -536,7 +536,8 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                 SettingRow(
                     Icons.Filled.Info,
                     "FinTrack ${BuildConfig.VERSION_NAME}",
-                    "Works offline. Your records never leave this phone.",
+                    if (sync.state == SyncStatus.State.SIGNED_OUT) "Works offline. Your records stay on this phone."
+                    else "Works offline and syncs with $webHost",
                 )
             }
         }
