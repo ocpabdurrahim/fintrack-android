@@ -14,7 +14,9 @@ import androidx.room.RoomDatabase
         RecurringEntity::class,
     ],
     version = 2,
-    exportSchema = true,
+    // No schema export: debug and release builds race on the same file. MigrationTest
+    // checks the upgrade from version 1 against the live schema instead.
+    exportSchema = false,
 )
 abstract class FinDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao

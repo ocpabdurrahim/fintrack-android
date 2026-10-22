@@ -29,6 +29,7 @@ jobs:
       FIN_KEYSTORE_PASSWORD: ${{ secrets.FIN_KEYSTORE_PASSWORD }}
       FIN_KEY_ALIAS: ${{ secrets.FIN_KEY_ALIAS }}
       FIN_KEY_PASSWORD: ${{ secrets.FIN_KEY_PASSWORD }}
+      FIREBASE_GOOGLE_SERVICES: ${{ secrets.FIREBASE_GOOGLE_SERVICES }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,10 +47,14 @@ jobs:
           echo "$FIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fin-release.jks"
           echo "FIN_KEYSTORE_FILE=$RUNNER_TEMP/fin-release.jks" >> "$GITHUB_ENV"
 
+      - name: Firebase config
+        run: bash .github/scripts/google-services.sh
+
+      # Debug builds talk to the Firebase emulators the test job runs (10.0.2.2 = the host).
       - name: Unit tests and APKs
         run: |
           chmod +x gradlew
-          ./gradlew --stacktrace testDebugUnitTest assembleDebug assembleDebugAndroidTest assembleRelease
+          ./gradlew --stacktrace -PfirebaseEmulatorHost=10.0.2.2 testDebugUnitTest assembleDebug assembleDebugAndroidTest assembleRelease
 
       - name: Name the release APK
         run: |
@@ -82,18 +87,14 @@ jobs:
           name: build-reports
           path: app/build/reports/
 
-      # The exported Room schema; commit it whenever the database version changes.
-      - uses: actions/upload-artifact@v4
-        with:
-          name: room-schemas
-          path: app/schemas/
-          if-no-files-found: ignore
 
   emulator:
     name: Emulator tests and screenshots
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    env:
+      FIREBASE_GOOGLE_SERVICES: ${{ secrets.FIREBASE_GOOGLE_SERVICES }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +102,26 @@ jobs:
         with:
           name: test-apks
           path: apks
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Start the Firebase emulators
+        run: |
+          bash .github/scripts/google-services.sh
+          nohup npx --yes firebase-tools@13.29.1 emulators:start --only auth,firestore --project "$FIREBASE_PROJECT" > firebase-emulators.log 2>&1 &
+          for i in $(seq 1 90); do
+            if curl -s -o /dev/null http://127.0.0.1:8080 && curl -s -o /dev/null http://127.0.0.1:9099; then echo "Emulators up"; exit 0; fi
+            sleep 2
+          done
+          cat firebase-emulators.log
+          exit 1
 
       - name: Enable KVM
         run: |
@@ -123,7 +144,9 @@ jobs:
         if: always()
         with:
           name: screenshots
-          path: emulator-out/
+          path: |
+            emulator-out/
+            firebase-emulators.log
 
   release:
     name: Publish GitHub release

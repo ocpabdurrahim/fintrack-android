@@ -5,11 +5,17 @@ import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
+import com.google.firebase.firestore.firestore
+import com.google.firebase.firestore.firestoreSettings
+import com.google.firebase.firestore.memoryCacheSettings
 import io.github.ocpabdurrahim.fintrack.data.BackupManager
 import io.github.ocpabdurrahim.fintrack.data.FinDatabase
 import io.github.ocpabdurrahim.fintrack.data.FinRepository
 import io.github.ocpabdurrahim.fintrack.data.Settings
 import io.github.ocpabdurrahim.fintrack.data.SettingsStore
+import io.github.ocpabdurrahim.fintrack.sync.SyncManager
 import io.github.ocpabdurrahim.fintrack.system.Reminders
 import io.github.ocpabdurrahim.fintrack.system.Shortcuts
 import kotlinx.coroutines.CoroutineScope
@@ -27,17 +33,29 @@ class FinApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        configureFirebase()
         container = AppContainer(this)
         Reminders.createChannel(this)
         Shortcuts.publish(this)
         container.appScope.launch {
             container.repository.ensureSeeded()
+            container.sync.start()
             container.repository.processRecurring(System.currentTimeMillis())
             val settings = container.settings.settings.first()
             if (settings.reminderEnabled) {
                 Reminders.ensureScheduled(this@FinApp, settings.reminderHour, settings.reminderMinute)
             }
         }
+    }
+
+    private fun configureFirebase() {
+        val host = BuildConfig.FIREBASE_EMULATOR_HOST
+        if (host.isNotEmpty()) {
+            Firebase.auth.useEmulator(host, 9099)
+            Firebase.firestore.useEmulator(host, 8080)
+        }
+        // The phone keeps its own database, so Firestore needs no disk cache of its own.
+        Firebase.firestore.firestoreSettings = firestoreSettings { setLocalCacheSettings(memoryCacheSettings {}) }
     }
 }
 
@@ -49,6 +67,7 @@ class AppContainer(val app: FinApp) {
     val settings = SettingsStore(app)
     val settingsState: StateFlow<Settings?> = settings.settings.stateIn(appScope, SharingStarted.Eagerly, null)
     val backup = BackupManager(app, repository, settings)
+    val sync = SyncManager(app, database, repository, settings, appScope)
     val appLock = AppLockState()
 }
 

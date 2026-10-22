@@ -25,3 +25,6 @@ keystore.properties
 # Firebase CLI
 /.firebase/
 *-debug.log
+
+# Firebase app config (CI writes it from a secret; see .github/scripts/google-services.sh)
+/app/google-services.json

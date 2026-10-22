@@ -1,6 +1,8 @@
 package io.github.ocpabdurrahim.fintrack.ui.more
 
 import android.Manifest
+import android.app.Activity
+import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -18,7 +20,13 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.SyncProblem
 import androidx.compose.material.icons.filled.Backup
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.ColorLens
@@ -35,6 +43,7 @@ import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -76,7 +85,10 @@ import io.github.ocpabdurrahim.fintrack.domain.Grouping
 import io.github.ocpabdurrahim.fintrack.domain.Money
 import io.github.ocpabdurrahim.fintrack.domain.Pin
 import io.github.ocpabdurrahim.fintrack.system.Biometrics
+import io.github.ocpabdurrahim.fintrack.sync.GoogleSignIn
+import io.github.ocpabdurrahim.fintrack.sync.SyncStatus
 import io.github.ocpabdurrahim.fintrack.system.Reminders
+import io.github.ocpabdurrahim.fintrack.system.findActivity
 import io.github.ocpabdurrahim.fintrack.ui.Routes
 import io.github.ocpabdurrahim.fintrack.ui.components.ConfirmDialog
 import io.github.ocpabdurrahim.fintrack.ui.components.PinSetupDialog
@@ -166,6 +178,29 @@ class MoreViewModel(private val c: AppContainer) : ViewModel() {
 
     fun skipNextLock() = c.appLock.skipNextLock()
 
+    val sync: StateFlow<SyncStatus> = c.sync.status
+    val webUrl: String get() = c.sync.webUrl
+
+    fun signIn(activity: Activity) {
+        viewModelScope.launch {
+            try {
+                c.sync.signInWithGoogle(activity)
+                say("Signed in. Your data is syncing.")
+            } catch (e: GoogleSignIn.Cancelled) {
+                // The user closed the account picker.
+            } catch (e: androidx.credentials.exceptions.NoCredentialException) {
+                say("No Google account on this phone. Add one in Android Settings first.")
+            } catch (e: Exception) {
+                say("Sign-in failed: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
+    fun signOut() {
+        c.sync.signOut()
+        say("Signed out. Your data stays on this phone.")
+    }
+
     fun exportJson(uri: Uri) = runFileTask("Backup failed") {
         val n = c.backup.exportJson(uri)
         say("Backup saved ($n transactions)")
@@ -202,7 +237,7 @@ class MoreViewModel(private val c: AppContainer) : ViewModel() {
 private val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 private fun formatTime(hour: Int, minute: Int): String = LocalTime.of(hour, minute).format(timeFormat)
 
-private enum class MoreDialog { CURRENCY, GROUPING, THEME, PIN, REMINDER_TIME, RESTORE_CONFIRM, ERASE }
+private enum class MoreDialog { CURRENCY, GROUPING, THEME, PIN, REMINDER_TIME, RESTORE_CONFIRM, ERASE, SIGN_OUT }
 
 @Composable
 fun MoreScreen(onOpen: (String) -> Unit) {
@@ -232,6 +267,13 @@ fun MoreScreen(onOpen: (String) -> Unit) {
         if (granted) dialog = MoreDialog.REMINDER_TIME
     }
     val biometricAvailable = remember { Biometrics.available(context) }
+    val sync by vm.sync.collectAsStateWithLifecycle()
+    val webHost = vm.webUrl.removePrefix("https://")
+    val openWeb = {
+        vm.skipNextLock()
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.webUrl))) }
+        Unit
+    }
     val today = Dates.forFileName(LocalDate.now())
 
     Scaffold(
@@ -244,6 +286,44 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                 bottom = padding.calculateBottomPadding() + 24.dp,
             ),
         ) {
+            item { GroupTitle("Sync") }
+            if (sync.state == SyncStatus.State.SIGNED_OUT) {
+                item {
+                    SettingRow(
+                        Icons.Filled.CloudOff,
+                        "Sync with the web",
+                        "Sign in with Google to use the same data at $webHost",
+                        onClick = { context.findActivity()?.let(vm::signIn) },
+                        trailing = {
+                            FilledTonalButton(onClick = { context.findActivity()?.let(vm::signIn) }) { Text("Sign in") }
+                        },
+                        tag = "sync_sign_in",
+                    )
+                }
+            } else {
+                item {
+                    SettingRow(
+                        when (sync.state) {
+                            SyncStatus.State.UP_TO_DATE -> Icons.Filled.CloudDone
+                            SyncStatus.State.ERROR -> Icons.Filled.SyncProblem
+                            else -> Icons.Filled.CloudUpload
+                        },
+                        sync.email ?: "Signed in",
+                        syncText(sync),
+                        tag = "sync_status",
+                    )
+                }
+                item { SettingRow(Icons.Filled.Language, "Open FinTrack on the web", webHost, onClick = openWeb) }
+                item {
+                    SettingRow(
+                        Icons.AutoMirrored.Filled.ExitToApp,
+                        "Sign out",
+                        "Stops syncing; your data stays on this phone",
+                        onClick = { dialog = MoreDialog.SIGN_OUT },
+                    )
+                }
+            }
+
             item { GroupTitle("Manage") }
             item { SettingRow(Icons.Filled.AccountBalanceWallet, "Accounts", "Cash, bank, mobile wallets", onClick = { onOpen(Routes.ACCOUNTS) }, tag = "more_accounts") }
             item { SettingRow(Icons.Filled.Category, "Categories", "Add, rename, recolour", onClick = { onOpen(Routes.CATEGORIES) }, tag = "more_categories") }
@@ -452,6 +532,16 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                 dialog = null
             },
         )
+        MoreDialog.SIGN_OUT -> ConfirmDialog(
+            title = "Sign out?",
+            text = "This phone stops syncing. Everything stays here and in your cloud copy; sign in again any time.",
+            confirmLabel = "Sign out",
+            onConfirm = {
+                vm.signOut()
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
         MoreDialog.ERASE -> ConfirmDialog(
             title = "Erase all data?",
             text = "Every transaction, account, category, budget and recurring entry will be deleted. This can't be undone.",
@@ -590,4 +680,23 @@ private fun CurrencyDialog(current: Settings, onDismiss: () -> Unit, onPick: (St
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Close") } },
     )
+}
+
+private fun syncText(s: SyncStatus): String = when (s.state) {
+    SyncStatus.State.SIGNED_OUT -> ""
+    SyncStatus.State.CONNECTING -> "Connecting…"
+    SyncStatus.State.SYNCING ->
+        if (s.pending > 0) "Uploading ${s.pending} change${if (s.pending == 1) "" else "s"}…" else "Syncing…"
+    SyncStatus.State.UP_TO_DATE -> "Up to date" + if (s.lastSyncedAt > 0) " · ${ago(s.lastSyncedAt)}" else ""
+    SyncStatus.State.ERROR -> "Sync paused (${s.error ?: "error"}). Retrying…"
+}
+
+private fun ago(millis: Long, now: Long = System.currentTimeMillis()): String {
+    val seconds = (now - millis) / 1000
+    return when {
+        seconds < 60 -> "just now"
+        seconds < 3600 -> "${seconds / 60} min ago"
+        seconds < 86_400 -> "${seconds / 3600} h ago"
+        else -> Dates.full(Dates.toLocalDate(millis))
+    }
 }

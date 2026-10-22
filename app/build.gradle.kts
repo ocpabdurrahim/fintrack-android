@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.google.services)
 }
 
 // Release signing comes from environment variables, which CI fills from the
@@ -23,8 +24,8 @@ android {
         applicationId = "io.github.ocpabdurrahim.fintrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -44,6 +45,9 @@ android {
             // Lets a test build sit next to the real app on the same phone.
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // -PfirebaseEmulatorHost=10.0.2.2 points a test build at the local Firebase
+            // emulators (10.0.2.2 is the computer, seen from an Android emulator).
+            buildConfigField("String", "FIREBASE_EMULATOR_HOST", "\"${findProperty("firebaseEmulatorHost") ?: ""}\"")
         }
         release {
             isMinifyEnabled = true
@@ -53,6 +57,7 @@ android {
                 "proguard-rules.pro",
             )
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            buildConfigField("String", "FIREBASE_EMULATOR_HOST", "\"\"")
         }
     }
 
@@ -85,11 +90,6 @@ kotlin {
     }
 }
 
-// Room writes each schema version to app/schemas, the reference for future migrations.
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -112,6 +112,14 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.biometric)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.kotlinx.coroutines.play.services)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
+    implementation(libs.googleid)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)

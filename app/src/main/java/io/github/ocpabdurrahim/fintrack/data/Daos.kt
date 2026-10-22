@@ -49,7 +49,7 @@ interface AccountDao {
     @Query("DELETE FROM accounts WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("DELETE FROM accounts WHERE deleted = 1")
+    @Query("DELETE FROM accounts WHERE deleted = 1 AND dirty = 0")
     suspend fun purgeTombstones()
 }
 
@@ -91,7 +91,7 @@ interface CategoryDao {
     @Query("DELETE FROM categories WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("DELETE FROM categories WHERE deleted = 1")
+    @Query("DELETE FROM categories WHERE deleted = 1 AND dirty = 0")
     suspend fun purgeTombstones()
 }
 
@@ -175,7 +175,7 @@ interface TransactionDao {
     @Query("DELETE FROM transactions WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("DELETE FROM transactions WHERE deleted = 1")
+    @Query("DELETE FROM transactions WHERE deleted = 1 AND dirty = 0")
     suspend fun purgeTombstones()
 }
 
@@ -214,7 +214,7 @@ interface BudgetDao {
     @Query("DELETE FROM budgets WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("DELETE FROM budgets WHERE deleted = 1")
+    @Query("DELETE FROM budgets WHERE deleted = 1 AND dirty = 0")
     suspend fun purgeTombstones()
 }
 
@@ -259,7 +259,7 @@ interface RecurringDao {
     @Query("DELETE FROM recurring WHERE id = :id")
     suspend fun hardDelete(id: String)
 
-    @Query("DELETE FROM recurring WHERE deleted = 1")
+    @Query("DELETE FROM recurring WHERE deleted = 1 AND dirty = 0")
     suspend fun purgeTombstones()
 }
 
