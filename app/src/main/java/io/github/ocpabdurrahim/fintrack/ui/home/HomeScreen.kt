@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Card
@@ -36,6 +37,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -57,6 +59,8 @@ import io.github.ocpabdurrahim.fintrack.data.FinRepository
 import io.github.ocpabdurrahim.fintrack.data.SettingsStore
 import io.github.ocpabdurrahim.fintrack.data.TxnItem
 import io.github.ocpabdurrahim.fintrack.data.TxnType
+import io.github.ocpabdurrahim.fintrack.update.AppUpdater
+import io.github.ocpabdurrahim.fintrack.update.UpdateState
 import io.github.ocpabdurrahim.fintrack.domain.Dates
 import io.github.ocpabdurrahim.fintrack.domain.Totals
 import io.github.ocpabdurrahim.fintrack.ui.LocalMoney
@@ -91,7 +95,15 @@ data class HomeState(
     val hideBalance: Boolean = false,
 )
 
-class HomeViewModel(repo: FinRepository, private val settings: SettingsStore) : ViewModel() {
+class HomeViewModel(
+    repo: FinRepository,
+    private val settings: SettingsStore,
+    private val updater: AppUpdater,
+) : ViewModel() {
+    val update: StateFlow<UpdateState> = updater.state
+
+    fun installUpdate() = updater.installNow()
+
     private val month: YearMonth = YearMonth.now()
 
     val state: StateFlow<HomeState> = combine(
@@ -134,7 +146,8 @@ fun HomeScreen(
     onAccounts: () -> Unit,
     onBudgets: () -> Unit,
 ) {
-    val vm = finViewModel { HomeViewModel(it.repository, it.settings) }
+    val vm = finViewModel { HomeViewModel(it.repository, it.settings, it.updater) }
+    val update by vm.update.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
 
     Scaffold(
@@ -170,6 +183,7 @@ fun HomeScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { UpdateBanner(update, onInstall = vm::installUpdate) }
             item { BalanceCard(state, onToggleHide = vm::toggleHide) }
             item { QuickActions(onAdd) }
             item { TodayCard(state, onBudgets) }
@@ -405,6 +419,37 @@ private fun AccountsRow(accounts: List<AccountBalance>, hidden: Boolean, onAccou
                     )
                 }
             }
+        }
+    }
+}
+
+/** Shown while a downloaded update waits; it also installs by itself once the app is left. */
+@Composable
+private fun UpdateBanner(state: UpdateState, onInstall: () -> Unit) {
+    val (version, installing) = when (state) {
+        is UpdateState.Ready -> state.release.version to false
+        is UpdateState.Installing -> state.release.version to true
+        else -> return
+    }
+    Card(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("update_banner"),
+    ) {
+        Row(Modifier.padding(start = 16.dp, top = 12.dp, bottom = 12.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text("FinTrack $version is ready", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onTertiaryContainer)
+                Text(
+                    if (installing) "Installing…" else "It installs by itself when you leave the app.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+            }
+            if (!installing) TextButton(onClick = onInstall) { Text("Install") }
         }
     }
 }

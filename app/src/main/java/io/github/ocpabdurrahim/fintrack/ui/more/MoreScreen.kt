@@ -40,7 +40,10 @@ import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalButton
@@ -75,6 +78,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewModelScope
 import io.github.ocpabdurrahim.fintrack.AppContainer
 import io.github.ocpabdurrahim.fintrack.BuildConfig
@@ -89,6 +94,8 @@ import io.github.ocpabdurrahim.fintrack.sync.GoogleSignIn
 import io.github.ocpabdurrahim.fintrack.sync.SyncStatus
 import io.github.ocpabdurrahim.fintrack.system.Reminders
 import io.github.ocpabdurrahim.fintrack.system.findActivity
+import io.github.ocpabdurrahim.fintrack.update.UpdateState
+import io.github.ocpabdurrahim.fintrack.update.UpdateWorker
 import io.github.ocpabdurrahim.fintrack.ui.Routes
 import io.github.ocpabdurrahim.fintrack.ui.components.ConfirmDialog
 import io.github.ocpabdurrahim.fintrack.ui.components.PinSetupDialog
@@ -102,6 +109,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlin.math.roundToInt
 
 data class CurrencyOption(val code: String, val symbol: String, val name: String, val grouping: Grouping)
 
@@ -196,6 +204,30 @@ class MoreViewModel(private val c: AppContainer) : ViewModel() {
         }
     }
 
+    val updateState: StateFlow<UpdateState> = c.updater.state
+    val currentVersion: String = c.updater.currentVersion
+
+    fun canInstallUpdates(): Boolean = c.updater.canInstall()
+
+    fun setAutoUpdate(on: Boolean) {
+        update { it.copy(autoUpdate = on) }
+        if (on) {
+            UpdateWorker.schedule(c.app)
+            checkForUpdates()
+        } else {
+            UpdateWorker.cancel(c.app)
+        }
+    }
+
+    fun checkForUpdates() {
+        viewModelScope.launch {
+            c.updater.checkAndDownload(userAsked = true)
+            if (c.updater.state.value is UpdateState.UpToDate) say("FinTrack $currentVersion is the latest version")
+        }
+    }
+
+    fun installUpdate() = c.updater.installNow()
+
     fun signOut() {
         c.sync.signOut()
         say("Signed out. Your data stays on this phone.")
@@ -269,6 +301,19 @@ fun MoreScreen(onOpen: (String) -> Unit) {
     val biometricAvailable = remember { Biometrics.available(context) }
     val sync by vm.sync.collectAsStateWithLifecycle()
     val webHost = vm.webUrl.removePrefix("https://")
+    val updateState by vm.updateState.collectAsStateWithLifecycle()
+    var canInstall by remember { mutableStateOf(vm.canInstallUpdates()) }
+    // Re-read when coming back from Android's "Install unknown apps" screen.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { canInstall = vm.canInstallUpdates() }
+    val openInstallSettings = {
+        vm.skipNextLock()
+        runCatching {
+            context.startActivity(
+                Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+            )
+        }
+        Unit
+    }
     val openWeb = {
         vm.skipNextLock()
         runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(vm.webUrl))) }
@@ -452,6 +497,38 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                     onClick = { dialog = MoreDialog.ERASE },
                     tint = MaterialTheme.colorScheme.error,
                 )
+            }
+
+            item { GroupTitle("App updates") }
+            item {
+                SettingRow(
+                    Icons.Filled.SystemUpdate,
+                    "Automatic updates",
+                    "Download and install new versions from GitHub by itself",
+                    onClick = { vm.setAutoUpdate(!s.autoUpdate) },
+                    trailing = { Switch(checked = s.autoUpdate, onCheckedChange = vm::setAutoUpdate) },
+                    tag = "auto_update",
+                )
+            }
+            item {
+                val (title, subtitle) = updateTexts(updateState, vm.currentVersion)
+                SettingRow(
+                    Icons.Filled.Refresh,
+                    title,
+                    subtitle,
+                    onClick = { if (updateState is UpdateState.Ready) vm.installUpdate() else vm.checkForUpdates() },
+                    tag = "check_updates",
+                )
+            }
+            if (!canInstall) {
+                item {
+                    SettingRow(
+                        Icons.Filled.Security,
+                        "Allow FinTrack to install updates",
+                        "A one-time Android switch: turn on “Allow from this source”",
+                        onClick = openInstallSettings,
+                    )
+                }
             }
 
             item { HorizontalDivider(Modifier.padding(vertical = 8.dp)) }
@@ -699,4 +776,14 @@ private fun ago(millis: Long, now: Long = System.currentTimeMillis()): String {
         seconds < 86_400 -> "${seconds / 3600} h ago"
         else -> Dates.full(Dates.toLocalDate(millis))
     }
+}
+
+private fun updateTexts(state: UpdateState, current: String): Pair<String, String> = when (state) {
+    UpdateState.Idle -> "Check for updates" to "You have FinTrack $current"
+    UpdateState.Checking -> "Checking for updates…" to "You have FinTrack $current"
+    is UpdateState.UpToDate -> "Check for updates" to "FinTrack $current is the latest · checked ${ago(state.checkedAt)}"
+    is UpdateState.Downloading -> "Downloading FinTrack ${state.release.version}…" to "${(state.progress * 100).roundToInt()}%"
+    is UpdateState.Ready -> "Install FinTrack ${state.release.version}" to "Downloaded. It installs by itself when you leave the app, or tap to install now."
+    is UpdateState.Installing -> "Installing FinTrack ${state.release.version}…" to "FinTrack closes and reopens updated"
+    is UpdateState.Failed -> "Check for updates" to "Last attempt failed: ${state.message}"
 }

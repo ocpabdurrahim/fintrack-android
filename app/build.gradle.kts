@@ -11,6 +11,13 @@ plugins {
 // Release signing comes from environment variables, which CI fills from the
 // repository secrets. Without them a release build falls back to the debug key:
 // it still installs, but it cannot update an APK signed with the real key.
+// The app's version: bump both for every release, then tag vX.Y.Z to publish it.
+val appVersionCode = 3
+val appVersionName = "1.1.0"
+
+// Where the app looks for updates (its GitHub releases).
+val updateApiUrl = "https://api.github.com/repos/ocpabdurrahim/fintrack-android/releases/latest"
+
 val releaseKeystore: File? = System.getenv("FIN_KEYSTORE_FILE")
     ?.takeIf { it.isNotBlank() }
     ?.let { file(it) }
@@ -24,9 +31,11 @@ android {
         applicationId = "io.github.ocpabdurrahim.fintrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.1.0"
+        // The overrides exist for CI's self-update test, which builds a "newer" copy.
+        versionCode = (findProperty("versionCodeOverride") as String?)?.toInt() ?: appVersionCode
+        versionName = (findProperty("versionNameOverride") as String?) ?: appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "UPDATE_API_URL", "\"$updateApiUrl\"")
     }
 
     signingConfigs {
@@ -48,6 +57,8 @@ android {
             // -PfirebaseEmulatorHost=10.0.2.2 points a test build at the local Firebase
             // emulators (10.0.2.2 is the computer, seen from an Android emulator).
             buildConfigField("String", "FIREBASE_EMULATOR_HOST", "\"${findProperty("firebaseEmulatorHost") ?: ""}\"")
+            // -PupdateApiUrl=... lets a test build update itself from a local server.
+            buildConfigField("String", "UPDATE_API_URL", "\"${findProperty("updateApiUrl") ?: updateApiUrl}\"")
         }
         release {
             isMinifyEnabled = true
@@ -96,6 +107,7 @@ dependencies {
     implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.process)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

@@ -34,6 +34,42 @@ for f in $(adb shell run-as "$DEBUG_APP" ls files/screens 2>/dev/null | tr -d '\
 done
 ls -la "$OUT/screens"
 
+echo "::group::Self-update test"
+# Serve a fake "latest release" (version 99.0.0) the way GitHub's API would,
+# then let the installed debug app find, verify and install it by itself.
+mkdir -p update-server
+cp apks/update/FinTrack-99.0.0.apk update-server/
+size=$(stat -c %s update-server/FinTrack-99.0.0.apk)
+sha=$(sha256sum update-server/FinTrack-99.0.0.apk | cut -d' ' -f1)
+cat > update-server/latest.json <<JSON
+{"tag_name": "v99.0.0", "body": "Self-update test", "assets": [
+  {"name": "FinTrack-99.0.0.apk", "size": $size, "digest": "sha256:$sha",
+   "browser_download_url": "http://10.0.2.2:8000/FinTrack-99.0.0.apk"}]}
+JSON
+python3 -m http.server 8000 --bind 127.0.0.1 --directory update-server > "$OUT/update-server.log" 2>&1 &
+server=$!
+adb shell appops set "$DEBUG_APP" REQUEST_INSTALL_PACKAGES allow
+adb shell am force-stop "$DEBUG_APP"
+adb logcat -c
+adb shell am start -W -n "$DEBUG_APP/$APP.MainActivity" > /dev/null
+sleep 6
+adb shell input keyevent KEYCODE_HOME   # updates install once the app is in the background
+updated=0
+for _ in $(seq 1 60); do
+  if adb shell dumpsys package "$DEBUG_APP" | grep -q "versionName=99.0.0"; then updated=1; break; fi
+  sleep 2
+done
+kill "$server" 2>/dev/null
+adb logcat -d -s FinTrackUpdate > "$OUT/self-update.log"
+cat "$OUT/self-update.log"
+if [ "$updated" = 1 ]; then
+  echo "The app downloaded, verified and installed its own update without any tap."
+else
+  echo "::error::The app did not update itself to 99.0.0"
+  status=1
+fi
+echo "::endgroup::"
+
 echo "::group::Release APK smoke test"
 adb install -r apks/release/app-release.apk
 adb logcat -c

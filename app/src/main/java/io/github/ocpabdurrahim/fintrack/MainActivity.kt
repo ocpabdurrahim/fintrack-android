@@ -36,11 +36,16 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         container.appLock.onForeground()
+        container.updater.onAppForeground()
     }
 
     override fun onStop() {
         super.onStop()
-        if (!isChangingConfigurations) container.appLock.onBackground()
+        if (!isChangingConfigurations) {
+            container.appLock.onBackground()
+            // A downloaded update installs once the app is out of the way.
+            container.updater.onAppBackground()
+        }
     }
 
     private fun handleIntent(intent: Intent?) {

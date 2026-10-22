@@ -54,11 +54,18 @@ jobs:
       - name: Unit tests and APKs
         run: |
           chmod +x gradlew
-          ./gradlew --stacktrace -PfirebaseEmulatorHost=10.0.2.2 testDebugUnitTest assembleDebug assembleDebugAndroidTest assembleRelease
+          TEST_PROPS="-PfirebaseEmulatorHost=10.0.2.2 -PupdateApiUrl=http://10.0.2.2:8000/latest.json"
+          ./gradlew --stacktrace $TEST_PROPS testDebugUnitTest assembleDebug assembleDebugAndroidTest assembleRelease
+          # A "newer" copy of the debug app for the self-update test.
+          cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/app-debug.apk"
+          ./gradlew $TEST_PROPS -PversionCodeOverride=9999 -PversionNameOverride=99.0.0 assembleDebug
+          mkdir -p app/build/outputs/apk/update
+          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/update/FinTrack-99.0.0.apk
+          cp "$RUNNER_TEMP/app-debug.apk" app/build/outputs/apk/debug/app-debug.apk
 
       - name: Name the release APK
         run: |
-          version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
+          version=$(sed -n 's/^val appVersionName = "\(.*\)"/\1/p' app/build.gradle.kts)
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk "dist/FinTrack-$version.apk"
           ls -l dist
@@ -79,6 +86,7 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
             app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
             app/build/outputs/apk/release/app-release.apk
+            app/build/outputs/apk/update/FinTrack-99.0.0.apk
 
       - name: Upload test reports
         if: failure()

@@ -18,6 +18,8 @@ import io.github.ocpabdurrahim.fintrack.data.SettingsStore
 import io.github.ocpabdurrahim.fintrack.sync.SyncManager
 import io.github.ocpabdurrahim.fintrack.system.Reminders
 import io.github.ocpabdurrahim.fintrack.system.Shortcuts
+import io.github.ocpabdurrahim.fintrack.update.AppUpdater
+import io.github.ocpabdurrahim.fintrack.update.UpdateWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +47,11 @@ class FinApp : Application() {
             if (settings.reminderEnabled) {
                 Reminders.ensureScheduled(this@FinApp, settings.reminderHour, settings.reminderMinute)
             }
+            container.updater.cleanup()
+            if (settings.autoUpdate) {
+                UpdateWorker.schedule(this@FinApp)
+                container.updater.checkAndDownload()
+            }
         }
     }
 
@@ -68,6 +75,7 @@ class AppContainer(val app: FinApp) {
     val settingsState: StateFlow<Settings?> = settings.settings.stateIn(appScope, SharingStarted.Eagerly, null)
     val backup = BackupManager(app, repository, settings)
     val sync = SyncManager(app, database, repository, settings, appScope)
+    val updater = AppUpdater(app, settings, appScope)
     val appLock = AppLockState()
 }
 

@@ -34,6 +34,8 @@ data class Settings(
     val reminderHour: Int = 21,
     val reminderMinute: Int = 0,
     val hideBalance: Boolean = false,
+    /** Download and install new releases by itself. */
+    val autoUpdate: Boolean = true,
 )
 
 private val Context.finDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
@@ -53,6 +55,7 @@ class SettingsStore(context: Context) {
         val reminderHour = intPreferencesKey("reminder_hour")
         val reminderMinute = intPreferencesKey("reminder_minute")
         val hideBalance = booleanPreferencesKey("hide_balance")
+        val autoUpdate = booleanPreferencesKey("auto_update")
     }
 
     val settings: Flow<Settings> = store.data
@@ -74,6 +77,7 @@ class SettingsStore(context: Context) {
             prefs[Keys.reminderHour] = s.reminderHour
             prefs[Keys.reminderMinute] = s.reminderMinute
             prefs[Keys.hideBalance] = s.hideBalance
+            prefs[Keys.autoUpdate] = s.autoUpdate
         }
     }
 
@@ -91,6 +95,7 @@ class SettingsStore(context: Context) {
             reminderHour = p[Keys.reminderHour] ?: d.reminderHour,
             reminderMinute = p[Keys.reminderMinute] ?: d.reminderMinute,
             hideBalance = p[Keys.hideBalance] ?: d.hideBalance,
+            autoUpdate = p[Keys.autoUpdate] ?: d.autoUpdate,
         )
     }
 }
