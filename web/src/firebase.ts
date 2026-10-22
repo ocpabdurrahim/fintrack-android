@@ -17,10 +17,10 @@ const EMULATOR = import.meta.env.VITE_USE_EMULATOR === 'true'
 async function hostingConfig(): Promise<FirebaseOptions> {
   const res = await fetch('/__/firebase/init.json')
   if (!res.ok) throw new Error('This page must be opened from its Firebase Hosting address.')
-  const config: FirebaseOptions = await res.json()
-  // Signing in through the site's own domain avoids third-party-cookie trouble.
-  if (/\.(web\.app|firebaseapp\.com)$/.test(location.hostname)) config.authDomain = location.hostname
-  return config
+  // authDomain stays the project's firebaseapp.com address: it is the sign-in
+  // redirect Google's OAuth client accepts out of the box. (Serving sign-in from
+  // web.app as well would need that address added to the client in Google Cloud.)
+  return res.json()
 }
 
 async function init(): Promise<FirebaseHandles> {
