@@ -13,8 +13,8 @@ import androidx.room.RoomDatabase
         BudgetEntity::class,
         RecurringEntity::class,
     ],
-    version = 1,
-    exportSchema = false,
+    version = 2,
+    exportSchema = true,
 )
 abstract class FinDatabase : RoomDatabase() {
     abstract fun accountDao(): AccountDao
@@ -22,9 +22,14 @@ abstract class FinDatabase : RoomDatabase() {
     abstract fun transactionDao(): TransactionDao
     abstract fun budgetDao(): BudgetDao
     abstract fun recurringDao(): RecurringDao
+    abstract fun syncDao(): SyncDao
 
     companion object {
-        fun build(context: Context): FinDatabase =
-            Room.databaseBuilder(context, FinDatabase::class.java, "fintrack.db").build()
+        const val NAME = "fintrack.db"
+
+        fun build(context: Context, name: String = NAME): FinDatabase =
+            Room.databaseBuilder(context, FinDatabase::class.java, name)
+                .addMigrations(Migrations.MIGRATION_1_2)
+                .build()
     }
 }

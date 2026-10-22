@@ -1,5 +1,6 @@
 package io.github.ocpabdurrahim.fintrack
 
+import io.github.ocpabdurrahim.fintrack.data.BudgetEntity
 import io.github.ocpabdurrahim.fintrack.data.Settings
 import io.github.ocpabdurrahim.fintrack.data.TransactionEntity
 import io.github.ocpabdurrahim.fintrack.data.TxnType
@@ -80,7 +81,7 @@ object DemoData {
             }
         }
 
-        repo.setBudget(0L, 70_000_00)
+        repo.setBudget(BudgetEntity.OVERALL, 70_000_00)
         repo.setBudget(categories.getValue("Food").id, 9_000_00)
         repo.setBudget(categories.getValue("Transport").id, 3_000_00)
         repo.setBudget(categories.getValue("Shopping").id, 5_000_00)

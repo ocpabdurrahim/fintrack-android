@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
+import io.github.ocpabdurrahim.fintrack.data.BudgetEntity
 import io.github.ocpabdurrahim.fintrack.data.CategoryEntity
 import io.github.ocpabdurrahim.fintrack.data.FinRepository
 import io.github.ocpabdurrahim.fintrack.data.TxnType
@@ -63,7 +64,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 
-data class BudgetLine(val category: CategoryEntity?, val categoryId: Long, val limit: Long, val spent: Long) {
+data class BudgetLine(val category: CategoryEntity?, val categoryId: String, val limit: Long, val spent: Long) {
     val fraction: Float get() = if (limit > 0) spent.toFloat() / limit else 0f
 }
 
@@ -93,10 +94,10 @@ class BudgetsViewModel(private val repo: FinRepository) : ViewModel() {
             BudgetsState(
                 loading = false,
                 month = m,
-                overall = budgets.firstOrNull { it.categoryId == 0L }?.let { BudgetLine(null, 0L, it.amount, total) },
+                overall = budgets.firstOrNull { it.categoryId == BudgetEntity.OVERALL }?.let { BudgetLine(null, BudgetEntity.OVERALL, it.amount, total) },
                 totalSpent = total,
                 lines = budgets
-                    .filter { it.categoryId != 0L }
+                    .filter { it.categoryId != BudgetEntity.OVERALL }
                     .mapNotNull { b -> byId[b.categoryId]?.let { c -> BudgetLine(c, c.id, b.amount, spentBy[c.id] ?: 0L) } }
                     .sortedByDescending { it.fraction },
                 available = categories.filter { it.type == TxnType.EXPENSE && !it.archived && it.id !in budgeted },
@@ -107,11 +108,11 @@ class BudgetsViewModel(private val repo: FinRepository) : ViewModel() {
         month.value = m
     }
 
-    fun setBudget(categoryId: Long, amount: Long) {
+    fun setBudget(categoryId: String, amount: Long) {
         viewModelScope.launch { repo.setBudget(categoryId, amount) }
     }
 
-    fun removeBudget(categoryId: Long) {
+    fun removeBudget(categoryId: String) {
         viewModelScope.launch { repo.removeBudget(categoryId) }
     }
 }
@@ -243,12 +244,12 @@ fun BudgetsScreen() {
             initialAmount = state.overall?.limit,
             onDismiss = { editor = null },
             onSave = { _, amount ->
-                vm.setBudget(0L, amount)
+                vm.setBudget(BudgetEntity.OVERALL, amount)
                 editor = null
             },
             onRemove = if (state.overall != null) {
                 {
-                    vm.removeBudget(0L)
+                    vm.removeBudget(BudgetEntity.OVERALL)
                     editor = null
                 }
             } else {

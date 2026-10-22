@@ -21,8 +21,8 @@ data class TxnItem(
 enum class RemoveResult { DELETED, ARCHIVED, REFUSED }
 
 private class Lookup(
-    private val accounts: Map<Long, AccountEntity>,
-    private val categories: Map<Long, CategoryEntity>,
+    private val accounts: Map<String, AccountEntity>,
+    private val categories: Map<String, CategoryEntity>,
 ) {
     fun item(t: TransactionEntity) = TxnItem(
         txn = t,
@@ -32,7 +32,11 @@ private class Lookup(
     )
 }
 
-/** The single gateway to the database. Screens read Flows and call the suspend writers. */
+/**
+ * The single gateway to the database. Screens read Flows and call the suspend
+ * writers. Every write stamps the row (updatedAt = now, dirty = true) so the
+ * sync engine knows to upload it; deletes leave a tombstone for the same reason.
+ */
 class FinRepository(private val db: FinDatabase) {
     private val accountDao = db.accountDao()
     private val categoryDao = db.categoryDao()
@@ -71,95 +75,104 @@ class FinRepository(private val db: FinDatabase) {
 
     suspend fun totalsBetween(start: Long, end: Long): Totals = Totals.of(txnDao.getBetween(start, end))
 
+    private fun now() = System.currentTimeMillis()
+
     // ---- Transactions -------------------------------------------------------
 
-    suspend fun getTransaction(id: Long): TransactionEntity? = txnDao.get(id)
+    suspend fun getTransaction(id: String): TransactionEntity? = txnDao.get(id)?.takeUnless { it.deleted }
 
     /** Inserts or updates. A new transaction with [repeat] also starts a recurring schedule. */
-    suspend fun saveTransaction(txn: TransactionEntity, repeat: Frequency? = null): Long =
+    suspend fun saveTransaction(txn: TransactionEntity, repeat: Frequency? = null): String =
         db.withTransaction {
-            if (txn.id == 0L) {
-                val id = txnDao.insert(txn)
-                if (repeat != null) {
-                    val recurringId = recurringDao.insert(
-                        RecurringEntity(
-                            type = txn.type,
-                            amount = txn.amount,
-                            categoryId = txn.categoryId,
-                            accountId = txn.accountId,
-                            toAccountId = txn.toAccountId,
-                            note = txn.note,
-                            frequency = repeat,
-                            startDate = txn.date,
-                            generated = 1,
-                        )
-                    )
-                    txnDao.update(txn.copy(id = id, recurringId = recurringId))
-                }
-                id
+            val now = now()
+            if (repeat != null && txnDao.get(txn.id) == null) {
+                val schedule = RecurringEntity(
+                    type = txn.type,
+                    amount = txn.amount,
+                    categoryId = txn.categoryId,
+                    accountId = txn.accountId,
+                    toAccountId = txn.toAccountId,
+                    note = txn.note,
+                    frequency = repeat,
+                    startDate = txn.date,
+                    generated = 1,
+                    updatedAt = now,
+                    dirty = true,
+                )
+                recurringDao.upsert(schedule)
+                // This transaction is occurrence 0 of the new schedule.
+                val first = txn.copy(id = Ids.occurrence(schedule.id, 0), recurringId = schedule.id, updatedAt = now, dirty = true)
+                txnDao.upsert(first)
+                first.id
             } else {
-                txnDao.update(txn)
+                txnDao.upsert(txn.copy(updatedAt = now, dirty = true, deleted = false))
                 txn.id
             }
         }
 
-    suspend fun deleteTransaction(id: Long) = txnDao.delete(id)
+    suspend fun deleteTransaction(id: String) = txnDao.softDelete(id, now())
 
     // ---- Accounts -----------------------------------------------------------
 
     suspend fun saveAccount(account: AccountEntity) {
-        if (account.id == 0L) accountDao.insert(account.copy(sortOrder = accountDao.maxSort() + 1))
-        else accountDao.update(account)
+        val isNew = accountDao.get(account.id)?.takeUnless { it.deleted } == null
+        val sortOrder = if (isNew) accountDao.maxSort() + 1 else account.sortOrder
+        accountDao.upsert(account.copy(sortOrder = sortOrder, updatedAt = now(), dirty = true, deleted = false))
     }
 
     /** Unused accounts are deleted; ones with history are archived so old records stay intact. */
     suspend fun removeAccount(account: AccountEntity): RemoveResult = db.withTransaction {
         val active = accountDao.getAll().count { !it.archived }
         if (!account.archived && active <= 1) return@withTransaction RemoveResult.REFUSED
+        val now = now()
         if (txnDao.countForAccount(account.id) == 0 && recurringDao.countForAccount(account.id) == 0) {
-            accountDao.delete(account.id)
+            accountDao.upsert(account.copy(deleted = true, updatedAt = now, dirty = true))
             RemoveResult.DELETED
         } else {
-            accountDao.update(account.copy(archived = true))
+            accountDao.upsert(account.copy(archived = true, updatedAt = now, dirty = true))
             RemoveResult.ARCHIVED
         }
     }
 
     // ---- Categories ---------------------------------------------------------
 
-    suspend fun saveCategory(category: CategoryEntity): Long =
-        if (category.id == 0L) {
-            categoryDao.insert(category.copy(sortOrder = categoryDao.maxSort(category.type.name) + 1))
-        } else {
-            categoryDao.update(category)
-            category.id
-        }
+    /** Returns the category's id. */
+    suspend fun saveCategory(category: CategoryEntity): String {
+        val isNew = categoryDao.get(category.id)?.takeUnless { it.deleted } == null
+        val sortOrder = if (isNew) categoryDao.maxSort(category.type.name) + 1 else category.sortOrder
+        categoryDao.upsert(category.copy(sortOrder = sortOrder, updatedAt = now(), dirty = true, deleted = false))
+        return category.id
+    }
 
     suspend fun removeCategory(category: CategoryEntity): RemoveResult = db.withTransaction {
         val activeOfType = categoryDao.getAll().count { !it.archived && it.type == category.type }
         if (!category.archived && activeOfType <= 1) return@withTransaction RemoveResult.REFUSED
-        budgetDao.deleteForCategory(category.id)
+        val now = now()
+        budgetDao.softDeleteForCategory(category.id, now)
         if (txnDao.countForCategory(category.id) == 0 && recurringDao.countForCategory(category.id) == 0) {
-            categoryDao.delete(category.id)
+            categoryDao.upsert(category.copy(deleted = true, updatedAt = now, dirty = true))
             RemoveResult.DELETED
         } else {
-            categoryDao.update(category.copy(archived = true))
+            categoryDao.upsert(category.copy(archived = true, updatedAt = now, dirty = true))
             RemoveResult.ARCHIVED
         }
     }
 
     // ---- Budgets ------------------------------------------------------------
 
-    suspend fun setBudget(categoryId: Long, amount: Long) =
-        budgetDao.upsert(BudgetEntity(categoryId = categoryId, amount = amount))
+    /** [categoryId] is a category id or [BudgetEntity.OVERALL]. */
+    suspend fun setBudget(categoryId: String, amount: Long) = budgetDao.upsert(
+        BudgetEntity(id = Ids.budget(categoryId), categoryId = categoryId, amount = amount, updatedAt = now(), dirty = true)
+    )
 
-    suspend fun removeBudget(categoryId: Long) = budgetDao.deleteForCategory(categoryId)
+    suspend fun removeBudget(categoryId: String) = budgetDao.softDeleteForCategory(categoryId, now())
 
     // ---- Recurring ----------------------------------------------------------
 
     /**
-     * Writes every occurrence that has come due. Runs at app start and from the
-     * daily worker, so a monthly rent shows up even if the app was closed that day.
+     * Writes every occurrence that has come due. Runs at app start, from the
+     * daily worker and after a sync. Occurrence ids are fixed, so the phone and
+     * the web adding the same rent payment produce one transaction, not two.
      */
     suspend fun processRecurring(now: Long): Int = writeLock.withLock {
         db.withTransaction {
@@ -168,8 +181,9 @@ class FinRepository(private val db: FinDatabase) {
                 var generated = r.generated
                 var next = Recurrence.occurrence(r.startDate, r.frequency, generated)
                 while (next <= now && created < MAX_CATCH_UP) {
-                    txnDao.insert(
+                    val inserted = txnDao.insertIfAbsent(
                         TransactionEntity(
+                            id = Ids.occurrence(r.id, generated),
                             type = r.type,
                             amount = r.amount,
                             categoryId = r.categoryId,
@@ -178,31 +192,36 @@ class FinRepository(private val db: FinDatabase) {
                             date = next,
                             note = r.note,
                             recurringId = r.id,
+                            updatedAt = now,
+                            dirty = true,
                         )
                     )
+                    if (inserted != -1L) created++
                     generated++
-                    created++
                     next = Recurrence.occurrence(r.startDate, r.frequency, generated)
                 }
-                if (generated != r.generated) recurringDao.update(r.copy(generated = generated))
+                if (generated != r.generated) {
+                    recurringDao.upsert(r.copy(generated = generated, updatedAt = now, dirty = true))
+                }
             }
             created
         }
     }
 
     /** Pausing stops new entries; resuming skips what was missed instead of back-filling it. */
-    suspend fun setRecurringActive(r: RecurringEntity, active: Boolean, now: Long = System.currentTimeMillis()) {
+    suspend fun setRecurringActive(r: RecurringEntity, active: Boolean, now: Long = now()) {
         var generated = r.generated
         if (active) {
             while (Recurrence.occurrence(r.startDate, r.frequency, generated) <= now && generated - r.generated < MAX_CATCH_UP) {
                 generated++
             }
         }
-        recurringDao.update(r.copy(active = active, generated = generated))
+        recurringDao.upsert(r.copy(active = active, generated = generated, updatedAt = now, dirty = true))
     }
 
     /** Stops the schedule. Entries it already wrote stay. */
-    suspend fun deleteRecurring(id: Long) = recurringDao.delete(id)
+    suspend fun deleteRecurring(r: RecurringEntity) =
+        recurringDao.upsert(r.copy(deleted = true, updatedAt = now(), dirty = true))
 
     // ---- Whole-database operations -----------------------------------------
 
@@ -213,15 +232,21 @@ class FinRepository(private val db: FinDatabase) {
     }
 
     private suspend fun seedIfEmpty() {
-        if (accountDao.count() == 0 && categoryDao.count() == 0) seedDefaults()
+        if (accountDao.count() == 0 && categoryDao.count() == 0) {
+            // Not dirty: the first sync uploads them only if the cloud is empty.
+            accountDao.upsertAll(DefaultData.accounts())
+            categoryDao.upsertAll(DefaultData.categories())
+        }
     }
 
-    /** Erases everything and puts the starter accounts and categories back. */
+    /** Erases everything (on every synced device) and puts the starter accounts and categories back. */
     suspend fun resetAll() {
         writeLock.withLock {
             db.withTransaction {
-                clearAll()
-                seedDefaults()
+                val now = now()
+                softDeleteEverything(now)
+                accountDao.upsertAll(DefaultData.accounts().map { it.copy(updatedAt = now, dirty = true) })
+                categoryDao.upsertAll(DefaultData.categories().map { it.copy(updatedAt = now, dirty = true) })
             }
         }
     }
@@ -240,27 +265,23 @@ class FinRepository(private val db: FinDatabase) {
     suspend fun replaceAll(data: BackupData) {
         writeLock.withLock {
             db.withTransaction {
-                clearAll()
-                accountDao.insertAll(data.accounts)
-                categoryDao.insertAll(data.categories)
-                txnDao.insertAll(data.transactions)
-                budgetDao.insertAll(data.budgets)
-                recurringDao.insertAll(data.recurring)
+                val now = now()
+                softDeleteEverything(now)
+                accountDao.upsertAll(data.accounts.map { it.copy(updatedAt = now, dirty = true, deleted = false) })
+                categoryDao.upsertAll(data.categories.map { it.copy(updatedAt = now, dirty = true, deleted = false) })
+                txnDao.upsertAll(data.transactions.map { it.copy(updatedAt = now, dirty = true, deleted = false) })
+                budgetDao.upsertAll(data.budgets.map { it.copy(updatedAt = now, dirty = true, deleted = false) })
+                recurringDao.upsertAll(data.recurring.map { it.copy(updatedAt = now, dirty = true, deleted = false) })
             }
         }
     }
 
-    private suspend fun seedDefaults() {
-        accountDao.insertAll(DefaultData.accounts())
-        categoryDao.insertAll(DefaultData.categories())
-    }
-
-    private suspend fun clearAll() {
-        txnDao.clear()
-        recurringDao.clear()
-        budgetDao.clear()
-        categoryDao.clear()
-        accountDao.clear()
+    private suspend fun softDeleteEverything(now: Long) {
+        txnDao.softDeleteAll(now)
+        recurringDao.softDeleteAll(now)
+        budgetDao.softDeleteAll(now)
+        categoryDao.softDeleteAll(now)
+        accountDao.softDeleteAll(now)
     }
 
     private companion object {

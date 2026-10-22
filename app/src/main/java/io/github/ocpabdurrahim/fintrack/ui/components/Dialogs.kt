@@ -31,7 +31,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -45,6 +44,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.ocpabdurrahim.fintrack.data.AccountEntity
+import io.github.ocpabdurrahim.fintrack.data.BudgetEntity
 import io.github.ocpabdurrahim.fintrack.data.CategoryEntity
 import io.github.ocpabdurrahim.fintrack.data.DefaultData
 import io.github.ocpabdurrahim.fintrack.data.TxnType
@@ -277,13 +277,13 @@ fun BudgetDialog(
     title: String,
     initialAmount: Long?,
     onDismiss: () -> Unit,
-    onSave: (categoryId: Long, amount: Long) -> Unit,
+    onSave: (categoryId: String, amount: Long) -> Unit,
     choices: List<CategoryEntity>? = null,
-    fixedCategoryId: Long = 0L,
+    fixedCategoryId: String = BudgetEntity.OVERALL,
     onRemove: (() -> Unit)? = null,
 ) {
     var amount by remember { mutableStateOf(initialAmount?.let { Money.toInput(it) } ?: "") }
-    var categoryId by remember { mutableLongStateOf(choices?.firstOrNull()?.id ?: fixedCategoryId) }
+    var categoryId by remember { mutableStateOf(choices?.firstOrNull()?.id ?: fixedCategoryId) }
     val parsed = Money.parse(amount)
     AlertDialog(
         onDismissRequest = onDismiss,

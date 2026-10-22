@@ -28,7 +28,7 @@ data class Totals(val income: Long = 0, val expense: Long = 0, val count: Int = 
     }
 }
 
-data class CategoryShare(val categoryId: Long?, val amount: Long, val fraction: Float)
+data class CategoryShare(val categoryId: String?, val amount: Long, val fraction: Float)
 
 object Stats {
     /** Per-category totals for one type, largest first, with each one's share of the whole. */

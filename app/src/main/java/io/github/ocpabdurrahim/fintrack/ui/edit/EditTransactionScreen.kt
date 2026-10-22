@@ -94,17 +94,17 @@ import java.time.ZoneOffset
 
 class EditTransactionViewModel(
     private val repo: FinRepository,
-    private val id: Long,
+    private val id: String?,
     initialType: TxnType,
 ) : ViewModel() {
-    val isEdit = id != 0L
+    val isEdit = id != null
 
     var type by mutableStateOf(initialType)
         private set
     var amountText by mutableStateOf("")
-    var categoryId by mutableStateOf<Long?>(null)
-    var accountId by mutableStateOf<Long?>(null)
-    var toAccountId by mutableStateOf<Long?>(null)
+    var categoryId by mutableStateOf<String?>(null)
+    var accountId by mutableStateOf<String?>(null)
+    var toAccountId by mutableStateOf<String?>(null)
     var date by mutableStateOf(LocalDate.now())
     var note by mutableStateOf("")
     var repeat by mutableStateOf<Frequency?>(null)
@@ -123,7 +123,7 @@ class EditTransactionViewModel(
 
     init {
         viewModelScope.launch {
-            if (isEdit) {
+            if (id != null) {
                 val t = repo.getTransaction(id) ?: return@launch
                 original = t
                 type = t.type
@@ -190,8 +190,9 @@ class EditTransactionViewModel(
     }
 
     fun delete(onDone: () -> Unit) {
+        val txnId = id ?: return
         viewModelScope.launch {
-            repo.deleteTransaction(id)
+            repo.deleteTransaction(txnId)
             onDone()
         }
     }
@@ -204,7 +205,7 @@ class EditTransactionViewModel(
 }
 
 @Composable
-fun EditTransactionScreen(id: Long, initialType: TxnType, onDone: () -> Unit) {
+fun EditTransactionScreen(id: String?, initialType: TxnType, onDone: () -> Unit) {
     val vm = finViewModel { EditTransactionViewModel(it.repository, id, initialType) }
     val allCategories by vm.categories.collectAsStateWithLifecycle()
     val allAccounts by vm.accounts.collectAsStateWithLifecycle()
@@ -453,7 +454,7 @@ fun EditTransactionScreen(id: Long, initialType: TxnType, onDone: () -> Unit) {
 }
 
 @Composable
-private fun AccountChips(accounts: List<AccountEntity>, selectedId: Long?, prefix: String, onPick: (Long) -> Unit) {
+private fun AccountChips(accounts: List<AccountEntity>, selectedId: String?, prefix: String, onPick: (String) -> Unit) {
     Row(
         Modifier.horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -472,8 +473,8 @@ private fun AccountChips(accounts: List<AccountEntity>, selectedId: Long?, prefi
 @Composable
 private fun CategoryGrid(
     categories: List<CategoryEntity>,
-    selectedId: Long?,
-    onPick: (Long) -> Unit,
+    selectedId: String?,
+    onPick: (String) -> Unit,
     onNew: () -> Unit,
 ) {
     // An even grid: as many ~84dp columns as fit, each stretched to share the width.

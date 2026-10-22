@@ -85,6 +85,11 @@ kotlin {
     }
 }
 
+// Room writes each schema version to app/schemas, the reference for future migrations.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

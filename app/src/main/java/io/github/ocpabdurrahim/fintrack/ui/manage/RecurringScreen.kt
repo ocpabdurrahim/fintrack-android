@@ -83,7 +83,7 @@ class RecurringViewModel(private val repo: FinRepository) : ViewModel() {
     }
 
     fun delete(r: RecurringEntity) {
-        viewModelScope.launch { repo.deleteRecurring(r.id) }
+        viewModelScope.launch { repo.deleteRecurring(r) }
     }
 }
 

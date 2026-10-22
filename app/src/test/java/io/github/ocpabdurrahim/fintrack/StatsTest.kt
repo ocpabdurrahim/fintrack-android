@@ -23,8 +23,8 @@ class StatsTest {
     private fun at(y: Int, m: Int, d: Int, h: Int = 12) =
         LocalDateTime.of(y, m, d, h, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
 
-    private fun txn(type: TxnType, amount: Long, category: Long?, date: Long, id: Long = 0) =
-        TransactionEntity(id = id, type = type, amount = amount, categoryId = category, accountId = 1, toAccountId = if (type == TxnType.TRANSFER) 2 else null, date = date, createdAt = 0)
+    private fun txn(type: TxnType, amount: Long, category: Int?, date: Long) =
+        TransactionEntity(type = type, amount = amount, categoryId = category?.let { "c$it" }, accountId = "a1", toAccountId = if (type == TxnType.TRANSFER) "a2" else null, date = date, createdAt = 0)
 
     @Test
     fun totalsIgnoreTransfers() {
@@ -50,7 +50,7 @@ class StatsTest {
             txn(TxnType.INCOME, 9999, 3, at(2026, 10, 2)),
         )
         val shares = Stats.byCategory(list, TxnType.EXPENSE)
-        assertEquals(listOf(2L, 1L), shares.map { it.categoryId })
+        assertEquals(listOf("c2", "c1"), shares.map { it.categoryId })
         assertEquals(300L, shares[0].amount)
         assertEquals(0.6f, shares[0].fraction, 0.0001f)
         assertEquals(0.4f, shares[1].fraction, 0.0001f)

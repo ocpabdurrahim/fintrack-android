@@ -80,6 +80,13 @@ jobs:
           name: build-reports
           path: app/build/reports/
 
+      # The exported Room schema; commit it whenever the database version changes.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: room-schemas
+          path: app/schemas/
+          if-no-files-found: ignore
+
   emulator:
     name: Emulator tests and screenshots
     needs: build

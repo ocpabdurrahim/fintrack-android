@@ -1,6 +1,11 @@
 package io.github.ocpabdurrahim.fintrack.data
 
-/** What a fresh install starts with. Everything here can be renamed or removed in the app. */
+/**
+ * What a fresh install starts with. Everything here can be renamed or removed
+ * in the app. The ids are fixed (not random), so the phone and the web app,
+ * each seeding on its own, end up with the same records instead of two copies.
+ * web/src/data/defaults.ts holds the same list; keep the two in step.
+ */
 object DefaultData {
 
     val colors: List<Int> = listOf(
@@ -21,43 +26,56 @@ object DefaultData {
 
     val accountEmojis = listOf("💵", "🏦", "📱", "💳", "👛", "💰", "🏧", "📈", "🐷", "🏠", "💼", "🌐")
 
-    fun accounts(): List<AccountEntity> = listOf(
-        AccountEntity(name = "Cash", emoji = "💵", sortOrder = 1),
-        AccountEntity(name = "Bank", emoji = "🏦", sortOrder = 2),
-        AccountEntity(name = "Mobile Wallet", emoji = "📱", sortOrder = 3),
+    private data class Seed(val id: String, val name: String, val emoji: String, val color: Long = 0)
+
+    private val accountSeeds = listOf(
+        Seed("acc_cash", "Cash", "💵"),
+        Seed("acc_bank", "Bank", "🏦"),
+        Seed("acc_wallet", "Mobile Wallet", "📱"),
     )
 
-    fun categories(): List<CategoryEntity> {
-        val expense = listOf(
-            Triple("Food", "🍔", 0xFFFFB74D),
-            Triple("Groceries", "🛒", 0xFF81C784),
-            Triple("Transport", "🚌", 0xFF64B5F6),
-            Triple("Rent", "🏠", 0xFFA1887F),
-            Triple("Bills & Utilities", "💡", 0xFFFFD54F),
-            Triple("Mobile & Internet", "📶", 0xFF4DD0E1),
-            Triple("Shopping", "🛍️", 0xFFF06292),
-            Triple("Health", "💊", 0xFFE57373),
-            Triple("Education", "📚", 0xFF7986CB),
-            Triple("Entertainment", "🎬", 0xFFBA68C8),
-            Triple("Family", "👪", 0xFF4DB6AC),
-            Triple("Gifts & Charity", "🎁", 0xFF9575CD),
-            Triple("Travel", "✈️", 0xFF4FC3F7),
-            Triple("Personal Care", "💇", 0xFFFF8A65),
-            Triple("Other", "📦", 0xFF90A4AE),
-        )
-        val income = listOf(
-            Triple("Salary", "💼", 0xFF66BB6A),
-            Triple("Business", "🏪", 0xFF26A69A),
-            Triple("Freelance", "💻", 0xFF5C6BC0),
-            Triple("Profit & Interest", "📈", 0xFF42A5F5),
-            Triple("Rent Received", "🏘️", 0xFF8D6E63),
-            Triple("Gifts Received", "🎁", 0xFFAB47BC),
-            Triple("Other Income", "💰", 0xFFFFCA28),
-        )
-        return expense.mapIndexed { i, (name, emoji, color) ->
-            CategoryEntity(name = name, type = TxnType.EXPENSE, emoji = emoji, color = color.toInt(), sortOrder = i + 1)
-        } + income.mapIndexed { i, (name, emoji, color) ->
-            CategoryEntity(name = name, type = TxnType.INCOME, emoji = emoji, color = color.toInt(), sortOrder = i + 1)
-        }
+    private val expenseSeeds = listOf(
+        Seed("cat_food", "Food", "🍔", 0xFFFFB74D),
+        Seed("cat_groceries", "Groceries", "🛒", 0xFF81C784),
+        Seed("cat_transport", "Transport", "🚌", 0xFF64B5F6),
+        Seed("cat_rent", "Rent", "🏠", 0xFFA1887F),
+        Seed("cat_bills", "Bills & Utilities", "💡", 0xFFFFD54F),
+        Seed("cat_mobile", "Mobile & Internet", "📶", 0xFF4DD0E1),
+        Seed("cat_shopping", "Shopping", "🛍️", 0xFFF06292),
+        Seed("cat_health", "Health", "💊", 0xFFE57373),
+        Seed("cat_education", "Education", "📚", 0xFF7986CB),
+        Seed("cat_entertainment", "Entertainment", "🎬", 0xFFBA68C8),
+        Seed("cat_family", "Family", "👪", 0xFF4DB6AC),
+        Seed("cat_gifts", "Gifts & Charity", "🎁", 0xFF9575CD),
+        Seed("cat_travel", "Travel", "✈️", 0xFF4FC3F7),
+        Seed("cat_personal", "Personal Care", "💇", 0xFFFF8A65),
+        Seed("cat_other", "Other", "📦", 0xFF90A4AE),
+    )
+
+    private val incomeSeeds = listOf(
+        Seed("cat_salary", "Salary", "💼", 0xFF66BB6A),
+        Seed("cat_business", "Business", "🏪", 0xFF26A69A),
+        Seed("cat_freelance", "Freelance", "💻", 0xFF5C6BC0),
+        Seed("cat_profit", "Profit & Interest", "📈", 0xFF42A5F5),
+        Seed("cat_rent_income", "Rent Received", "🏘️", 0xFF8D6E63),
+        Seed("cat_gifts_income", "Gifts Received", "🎁", 0xFFAB47BC),
+        Seed("cat_other_income", "Other Income", "💰", 0xFFFFCA28),
+    )
+
+    fun accounts(): List<AccountEntity> = accountSeeds.mapIndexed { i, s ->
+        AccountEntity(id = s.id, name = s.name, emoji = s.emoji, sortOrder = i + 1)
     }
+
+    fun categories(): List<CategoryEntity> =
+        expenseSeeds.mapIndexed { i, s -> s.toCategory(TxnType.EXPENSE, i + 1) } +
+            incomeSeeds.mapIndexed { i, s -> s.toCategory(TxnType.INCOME, i + 1) }
+
+    /** The fixed id a starter account has, by its (original) name. */
+    fun accountIdFor(name: String): String? = accountSeeds.firstOrNull { it.name == name }?.id
+
+    fun categoryIdFor(type: TxnType, name: String): String? =
+        (if (type == TxnType.INCOME) incomeSeeds else expenseSeeds).firstOrNull { it.name == name }?.id
+
+    private fun Seed.toCategory(type: TxnType, order: Int) =
+        CategoryEntity(id = id, name = name, type = type, emoji = emoji, color = color.toInt(), sortOrder = order)
 }

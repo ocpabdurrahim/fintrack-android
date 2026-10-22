@@ -136,7 +136,7 @@ class TransactionsViewModel(private val repo: FinRepository) : ViewModel() {
 }
 
 @Composable
-fun TransactionsScreen(onAdd: (TxnType) -> Unit, onOpen: (Long) -> Unit) {
+fun TransactionsScreen(onAdd: (TxnType) -> Unit, onOpen: (String) -> Unit) {
     val vm = finViewModel { TransactionsViewModel(it.repository) }
     val state by vm.state.collectAsStateWithLifecycle()
     var searchOpen by rememberSaveable { mutableStateOf(false) }

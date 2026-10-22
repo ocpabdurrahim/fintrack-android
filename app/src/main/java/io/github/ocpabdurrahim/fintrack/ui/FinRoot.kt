@@ -99,7 +99,9 @@ object Routes {
     const val RECURRING = "recurring"
     const val EDIT = "edit?id={id}&type={type}"
 
-    fun edit(id: Long = 0L, type: TxnType = TxnType.EXPENSE) = "edit?id=$id&type=${type.name}"
+    /** No [id] opens an empty form for a new transaction. Ids are URL-safe (letters, digits, _ and -). */
+    fun edit(id: String? = null, type: TxnType = TxnType.EXPENSE) =
+        if (id == null) "edit?type=${type.name}" else "edit?id=$id&type=${type.name}"
 }
 
 private data class Tab(val route: String, val label: String, val icon: ImageVector, val selectedIcon: ImageVector)
@@ -224,8 +226,9 @@ private fun FinNavHost(pendingAdd: TxnType?, onPendingAddHandled: () -> Unit) {
                 route = Routes.EDIT,
                 arguments = listOf(
                     navArgument("id") {
-                        type = NavType.LongType
-                        defaultValue = 0L
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = null
                     },
                     navArgument("type") {
                         type = NavType.StringType
@@ -234,7 +237,7 @@ private fun FinNavHost(pendingAdd: TxnType?, onPendingAddHandled: () -> Unit) {
                 ),
             ) { backStackEntry ->
                 val args = backStackEntry.arguments
-                val id = args?.getLong("id") ?: 0L
+                val id = args?.getString("id")
                 val typeName = args?.getString("type")
                 val type = TxnType.entries.firstOrNull { it.name == typeName } ?: TxnType.EXPENSE
                 EditTransactionScreen(id = id, initialType = type, onDone = { nav.navigateUp() })

@@ -21,10 +21,14 @@ data class BackupData(
     val grouping: Grouping? = null,
 )
 
-/** Plain JSON so a backup stays readable, and restorable by future versions. */
+/**
+ * Plain JSON so a backup stays readable, and restorable by future versions.
+ * Version 1 (FinTrack 1.0.0) used numeric ids; version 2 uses string ids.
+ * Both can be restored.
+ */
 object BackupCodec {
     private const val FORMAT = "fintrack-backup"
-    const val VERSION = 1
+    const val VERSION = 2
 
     fun encode(data: BackupData, exportedAt: Long = System.currentTimeMillis()): String {
         val root = JSONObject()
@@ -97,66 +101,13 @@ object BackupCodec {
         } catch (e: JSONException) {
             throw IllegalArgumentException("This file is not a FinTrack backup.")
         }
-        require(root.optString("format") == FORMAT) { "This file is not a FinTrack backup." }
+        require(root.optString("format") in FORMATS) { "This file is not a FinTrack backup." }
         val version = root.optInt("version")
         require(version in 1..VERSION) { "This backup comes from a newer version of FinTrack. Update the app first." }
 
         try {
-            return BackupData(
-                accounts = root.getJSONArray("accounts").mapObjects { o ->
-                    AccountEntity(
-                        id = o.getLong("id"),
-                        name = o.getString("name"),
-                        emoji = o.optString("emoji", "💵"),
-                        openingBalance = o.optLong("openingBalance"),
-                        archived = o.optBoolean("archived"),
-                        sortOrder = o.optInt("sortOrder"),
-                    )
-                },
-                categories = root.getJSONArray("categories").mapObjects { o ->
-                    CategoryEntity(
-                        id = o.getLong("id"),
-                        name = o.getString("name"),
-                        type = TxnType.valueOf(o.getString("type")),
-                        emoji = o.optString("emoji", "📦"),
-                        color = o.optInt("color", DefaultData.colors.last()),
-                        archived = o.optBoolean("archived"),
-                        sortOrder = o.optInt("sortOrder"),
-                    )
-                },
-                transactions = root.getJSONArray("transactions").mapObjects { o ->
-                    val date = o.getLong("date")
-                    TransactionEntity(
-                        id = o.getLong("id"),
-                        type = TxnType.valueOf(o.getString("type")),
-                        amount = o.getLong("amount"),
-                        categoryId = o.longOrNull("categoryId"),
-                        accountId = o.getLong("accountId"),
-                        toAccountId = o.longOrNull("toAccountId"),
-                        date = date,
-                        note = o.optString("note"),
-                        recurringId = o.longOrNull("recurringId"),
-                        createdAt = o.optLong("createdAt", date),
-                    )
-                },
-                budgets = root.optJSONArray("budgets")?.mapObjects { o ->
-                    BudgetEntity(id = o.getLong("id"), categoryId = o.getLong("categoryId"), amount = o.getLong("amount"))
-                }.orEmpty(),
-                recurring = root.optJSONArray("recurring")?.mapObjects { o ->
-                    RecurringEntity(
-                        id = o.getLong("id"),
-                        type = TxnType.valueOf(o.getString("type")),
-                        amount = o.getLong("amount"),
-                        categoryId = o.longOrNull("categoryId"),
-                        accountId = o.getLong("accountId"),
-                        toAccountId = o.longOrNull("toAccountId"),
-                        note = o.optString("note"),
-                        frequency = Frequency.valueOf(o.getString("frequency")),
-                        startDate = o.getLong("startDate"),
-                        generated = o.getInt("generated"),
-                        active = o.optBoolean("active", true),
-                    )
-                }.orEmpty(),
+            val data = if (version == 1) decodeV1(root) else decodeV2(root)
+            return data.copy(
                 currencyCode = root.optString("currencyCode").ifEmpty { null },
                 currencySymbol = root.optString("currencySymbol").ifEmpty { null },
                 grouping = root.optString("grouping").let { g -> Grouping.entries.firstOrNull { it.name == g } },
@@ -165,6 +116,128 @@ object BackupCodec {
             throw IllegalArgumentException("The backup file is damaged: ${e.message}")
         }
     }
+
+    private fun decodeV2(root: JSONObject) = BackupData(
+        accounts = root.getJSONArray("accounts").mapObjects { o ->
+            AccountEntity(
+                id = o.getString("id"),
+                name = o.getString("name"),
+                emoji = o.optString("emoji", "💵"),
+                openingBalance = o.optLong("openingBalance"),
+                archived = o.optBoolean("archived"),
+                sortOrder = o.optInt("sortOrder"),
+            )
+        },
+        categories = root.getJSONArray("categories").mapObjects { o ->
+            CategoryEntity(
+                id = o.getString("id"),
+                name = o.getString("name"),
+                type = TxnType.valueOf(o.getString("type")),
+                emoji = o.optString("emoji", "📦"),
+                color = o.optInt("color", DefaultData.colors.last()),
+                archived = o.optBoolean("archived"),
+                sortOrder = o.optInt("sortOrder"),
+            )
+        },
+        transactions = root.getJSONArray("transactions").mapObjects { o ->
+            val date = o.getLong("date")
+            TransactionEntity(
+                id = o.getString("id"),
+                type = TxnType.valueOf(o.getString("type")),
+                amount = o.getLong("amount"),
+                categoryId = o.stringOrNull("categoryId"),
+                accountId = o.getString("accountId"),
+                toAccountId = o.stringOrNull("toAccountId"),
+                date = date,
+                note = o.optString("note"),
+                recurringId = o.stringOrNull("recurringId"),
+                createdAt = o.optLong("createdAt", date),
+            )
+        },
+        budgets = root.optJSONArray("budgets")?.mapObjects { o ->
+            val categoryId = o.getString("categoryId")
+            BudgetEntity(id = Ids.budget(categoryId), categoryId = categoryId, amount = o.getLong("amount"))
+        }.orEmpty(),
+        recurring = root.optJSONArray("recurring")?.mapObjects { o ->
+            RecurringEntity(
+                id = o.getString("id"),
+                type = TxnType.valueOf(o.getString("type")),
+                amount = o.getLong("amount"),
+                categoryId = o.stringOrNull("categoryId"),
+                accountId = o.getString("accountId"),
+                toAccountId = o.stringOrNull("toAccountId"),
+                note = o.optString("note"),
+                frequency = Frequency.valueOf(o.getString("frequency")),
+                startDate = o.getLong("startDate"),
+                generated = o.getInt("generated"),
+                active = o.optBoolean("active", true),
+            )
+        }.orEmpty(),
+    )
+
+    /** FinTrack 1.0.0 files: numeric ids, mapped the same way the database migration maps them. */
+    private fun decodeV1(root: JSONObject): BackupData {
+        val ids = LegacyIdMapper()
+        val accounts = root.getJSONArray("accounts").mapObjects { o ->
+            AccountEntity(
+                id = ids.account(o.getLong("id"), o.getString("name")),
+                name = o.getString("name"),
+                emoji = o.optString("emoji", "💵"),
+                openingBalance = o.optLong("openingBalance"),
+                archived = o.optBoolean("archived"),
+                sortOrder = o.optInt("sortOrder"),
+            )
+        }
+        val categories = root.getJSONArray("categories").mapObjects { o ->
+            val type = TxnType.valueOf(o.getString("type"))
+            CategoryEntity(
+                id = ids.category(o.getLong("id"), type, o.getString("name")),
+                name = o.getString("name"),
+                type = type,
+                emoji = o.optString("emoji", "📦"),
+                color = o.optInt("color", DefaultData.colors.last()),
+                archived = o.optBoolean("archived"),
+                sortOrder = o.optInt("sortOrder"),
+            )
+        }
+        val recurring = root.optJSONArray("recurring")?.mapObjects { o ->
+            RecurringEntity(
+                id = ids.recurring(o.getLong("id")),
+                type = TxnType.valueOf(o.getString("type")),
+                amount = o.getLong("amount"),
+                categoryId = ids.categoryRef(o.longOrNull("categoryId")),
+                accountId = ids.accountRef(o.getLong("accountId")),
+                toAccountId = o.longOrNull("toAccountId")?.let(ids::accountRef),
+                note = o.optString("note"),
+                frequency = Frequency.valueOf(o.getString("frequency")),
+                startDate = o.getLong("startDate"),
+                generated = o.getInt("generated"),
+                active = o.optBoolean("active", true),
+            )
+        }.orEmpty()
+        val transactions = root.getJSONArray("transactions").mapObjects { o ->
+            val date = o.getLong("date")
+            TransactionEntity(
+                type = TxnType.valueOf(o.getString("type")),
+                amount = o.getLong("amount"),
+                categoryId = ids.categoryRef(o.longOrNull("categoryId")),
+                accountId = ids.accountRef(o.getLong("accountId")),
+                toAccountId = o.longOrNull("toAccountId")?.let(ids::accountRef),
+                date = date,
+                note = o.optString("note"),
+                recurringId = ids.recurringRef(o.longOrNull("recurringId")),
+                createdAt = o.optLong("createdAt", date),
+            )
+        }
+        val budgets = root.optJSONArray("budgets")?.mapObjects { o ->
+            val categoryId = ids.budgetCategoryRef(o.getLong("categoryId"))
+            BudgetEntity(id = Ids.budget(categoryId), categoryId = categoryId, amount = o.getLong("amount"))
+        }.orEmpty()
+        return BackupData(accounts, categories, transactions, budgets, recurring)
+    }
+
+    // 1.0.0 was still called "Fin" when some of its backups were made.
+    private val FORMATS = setOf(FORMAT, "fin-backup")
 
     private inline fun <T> List<T>.toJsonArray(transform: (T) -> JSONObject): JSONArray {
         val array = JSONArray()
@@ -176,6 +249,7 @@ object BackupCodec {
         (0 until length()).map { transform(getJSONObject(it)) }
 
     private fun JSONObject.longOrNull(key: String): Long? = if (isNull(key)) null else getLong(key)
+    private fun JSONObject.stringOrNull(key: String): String? = if (isNull(key)) null else getString(key)
 }
 
 /** Spreadsheet export: one row per transaction, oldest first. */
@@ -188,7 +262,7 @@ object CsvExporter {
         // The byte-order mark makes Excel read the file as UTF-8, so Bangla notes survive.
         val out = StringBuilder("﻿")
         out.append("Date,Type,Category,Account,To account,Amount,Note\r\n")
-        for (t in data.transactions.sortedWith(compareBy({ it.date }, { it.id }))) {
+        for (t in data.transactions.sortedWith(compareBy({ it.date }, { it.createdAt }))) {
             val row = listOf(
                 Instant.ofEpochMilli(t.date).atZone(zone).format(dateFormat),
                 t.type.name.lowercase().replaceFirstChar { it.uppercase() },

@@ -52,6 +52,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import io.github.ocpabdurrahim.fintrack.data.AccountBalance
+import io.github.ocpabdurrahim.fintrack.data.BudgetEntity
 import io.github.ocpabdurrahim.fintrack.data.FinRepository
 import io.github.ocpabdurrahim.fintrack.data.SettingsStore
 import io.github.ocpabdurrahim.fintrack.data.TxnItem
@@ -114,7 +115,7 @@ class HomeViewModel(repo: FinRepository, private val settings: SettingsStore) : 
             todayIncome = todayTotals.income,
             todayExpense = todayTotals.expense,
             todayCount = todayTotals.count,
-            overallBudget = budgets.firstOrNull { it.categoryId == 0L }?.amount,
+            overallBudget = budgets.firstOrNull { it.categoryId == BudgetEntity.OVERALL }?.amount,
             recent = recent,
             hideBalance = s.hideBalance,
         )
@@ -128,7 +129,7 @@ class HomeViewModel(repo: FinRepository, private val settings: SettingsStore) : 
 @Composable
 fun HomeScreen(
     onAdd: (TxnType) -> Unit,
-    onOpen: (Long) -> Unit,
+    onOpen: (String) -> Unit,
     onSeeAll: () -> Unit,
     onAccounts: () -> Unit,
     onBudgets: () -> Unit,
