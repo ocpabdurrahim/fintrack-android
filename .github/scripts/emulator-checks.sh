@@ -11,6 +11,11 @@ OUT=emulator-out
 mkdir -p "$OUT/screens" "$OUT/release"
 status=0
 
+# A slow system app (e.g. the launcher) can pop an "isn't responding" dialog over
+# everything after a long run. Hide those; real crashes are still caught below
+# from the crash log and by checking the app process.
+adb shell settings put global hide_error_dialogs 1 || true
+
 adb install -r apks/debug/app-debug.apk
 adb install -r apks/androidTest/debug/app-debug-androidTest.apk
 
@@ -39,9 +44,23 @@ dump() {
   adb shell uiautomator dump /sdcard/ui.xml > /dev/null 2>&1
   adb pull /sdcard/ui.xml "$OUT/release/ui.xml" > /dev/null 2>&1
 }
+# Dismisses a system "isn't responding" dialog if one is showing anyway.
+dismiss_system_dialog() {
+  local xy
+  xy=$(python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "android:id/aerr_wait" --id)
+  if [ -n "$xy" ] && [ "$xy" != "None" ]; then
+    echo "Dismissing a system 'not responding' dialog"
+    # shellcheck disable=SC2086
+    adb shell input tap $xy
+    sleep 2
+    dump
+  fi
+}
+
 # Taps the element with the given Compose test tag (exposed as a resource id).
 tap() {
   dump
+  dismiss_system_dialog
   local xy
   xy=$(python3 .github/scripts/find_node.py "$OUT/release/ui.xml" "$1" --id)
   if [ -z "$xy" ] || [ "$xy" = "None" ]; then
