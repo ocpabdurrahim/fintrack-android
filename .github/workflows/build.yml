@@ -112,9 +112,12 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      # Sets FIREBASE_PROJECT, which only later steps can see.
+      - name: Firebase config
+        run: bash .github/scripts/google-services.sh
+
       - name: Start the Firebase emulators
         run: |
-          bash .github/scripts/google-services.sh
           nohup npx --yes firebase-tools@13.29.1 emulators:start --only auth,firestore --project "$FIREBASE_PROJECT" > firebase-emulators.log 2>&1 &
           for i in $(seq 1 90); do
             if curl -s -o /dev/null http://127.0.0.1:8080 && curl -s -o /dev/null http://127.0.0.1:9099; then echo "Emulators up"; exit 0; fi
