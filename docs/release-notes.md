@@ -4,6 +4,7 @@ FinTrack is a daily income and expense tracker for Android, with a matching web 
 
 ### New in 1.1.0
 - **Sync with the web.** Sign in with Google under **More → Sync**, then open https://fintrack-854d7.web.app in any browser with the same account. Both show the same data, and changes on either side reach the other in seconds.
+- **Updates itself.** From now on FinTrack downloads new versions from this Releases page and installs them when you leave the app. Turn on **More → App updates → Allow FinTrack to install updates** once; on Android 12 and newer no tap is needed after that. Each download is checked against its published SHA-256 and must be signed with the same key, or it is not installed. You can switch automatic updates off in the same place.
 - The phone still works fully offline. Changes made without a connection upload when you're back online.
 - Updating from 1.0.0 keeps every record. The first sign-in uploads them.
 - Small fixes: "Today" no longer shows "-৳0", and the "Enter an amount" message sits next to the Save button.

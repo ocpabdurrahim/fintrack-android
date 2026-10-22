@@ -1,6 +1,8 @@
 package io.github.ocpabdurrahim.fintrack
 
 import android.graphics.Bitmap
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -31,6 +33,14 @@ fun ComposeTestRule.waitForText(text: String, timeoutMs: Long = 10_000) =
 
 fun ComposeTestRule.waitForGone(tag: String, timeoutMs: Long = 10_000) =
     waitUntil(timeoutMs) { onAllNodesWithTag(tag).fetchSemanticsNodes().isEmpty() }
+
+fun ComposeTestRule.waitForTextOtherThan(tag: String, text: String, timeoutMs: Long = 10_000) =
+    waitUntil(timeoutMs) {
+        onAllNodesWithTag(tag).fetchSemanticsNodes().any { node ->
+            val shown = node.config.getOrNull(SemanticsProperties.Text)?.joinToString { it.text }
+            shown != null && shown != text
+        }
+    }
 
 fun ComposeTestRule.waitForTextOf(tag: String, expected: String, timeoutMs: Long = 10_000) =
     waitUntil(timeoutMs) { runCatching { onNodeWithTag(tag).assertTextEquals(expected) }.isSuccess }

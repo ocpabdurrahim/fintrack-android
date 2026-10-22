@@ -183,7 +183,10 @@ fun HomeScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { UpdateBanner(update, onInstall = vm::installUpdate) }
+            // Only add the slot when there is something to show, so the list's spacing doesn't shift.
+            if (update is UpdateState.Ready || update is UpdateState.Installing) {
+                item { UpdateBanner(update, onInstall = vm::installUpdate) }
+            }
             item { BalanceCard(state, onToggleHide = vm::toggleHide) }
             item { QuickActions(onAdd) }
             item { TodayCard(state, onBudgets) }

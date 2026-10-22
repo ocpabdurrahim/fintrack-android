@@ -41,7 +41,8 @@ class ScreenshotTour {
     @Test
     fun tour() {
         runBlocking { DemoData.load(container) }
-        compose.waitForTag("txn_row")
+        // The recent rows can sit just below the fold, so wait for the balance instead.
+        compose.waitForTextOtherThan("balance_total", "৳0")
         shot("01_home")
 
         tab("transactions")

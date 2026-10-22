@@ -64,6 +64,8 @@ Every push is built by GitHub Actions:
   1. Unit tests and the debug and release APKs.
   2. An Android 14 emulator run against local Firebase emulators. The UI tests add, transfer, delete and lock; a sync test checks phone-to-cloud, cloud-to-phone and deletes both ways; a migration test upgrades a 1.0.0 database; a screenshot tour runs; and the minified release APK is smoke-tested.
   3. Pushing a tag such as `v1.1.1` publishes a GitHub release with the signed APK.
+
+Installed phones pick up that release by themselves: the app checks `releases/latest` at start-up and daily, downloads the APK, verifies its SHA-256, package name, higher `versionCode` and signing certificate, and installs it through PackageInstaller once the app is in the background (silently on Android 12+). Raise `appVersionCode` and `appVersionName` in `app/build.gradle.kts` for every release. CI checks this path end to end by serving a 99.0.0 build of the debug app as a fake release.
 - [`web.yml`](.github/workflows/web.yml), for the web app: type-check, unit tests and a production build.
 
 Locally:
