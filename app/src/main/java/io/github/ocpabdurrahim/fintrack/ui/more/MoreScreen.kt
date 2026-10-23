@@ -337,8 +337,7 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                     SettingRow(
                         Icons.Filled.CloudOff,
                         "Sync with the web",
-                        sync.refusedEmail?.let { "$it can't use this FinTrack's cloud: it's private to its owner. Your records stay on this phone." }
-                            ?: "Sign in with Google to use the same data at $webHost",
+                        "Sign in with Google to use the same data at $webHost",
                         onClick = { context.findActivity()?.let(vm::signIn) },
                         trailing = {
                             FilledTonalButton(onClick = { context.findActivity()?.let(vm::signIn) }) { Text("Sign in") }

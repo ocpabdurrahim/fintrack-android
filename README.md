@@ -2,6 +2,8 @@
 
 A daily income and expense tracker for Android, with a matching web app. Record what comes in and what goes out in a few taps, and see where the money went. The phone app works fully offline. If you sign in with Google, the same records also appear in the web app, and changes on either side reach the other in seconds.
 
+Anyone can use it: each Google account gets its own separate records, and no account can see another's.
+
 **[Download the latest APK](https://github.com/ocpabdurrahim/fintrack-android/releases/latest)** (Android 8.0 or newer) · **[Open the web app](https://fintrack-854d7.web.app)**
 
 | Home | Add | Statistics |

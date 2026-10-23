@@ -1,6 +1,6 @@
 import {
-  getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithEmailAndPassword, signInWithPopup,
-  signInWithRedirect, signOut, type Auth, type User,
+  getRedirectResult, GoogleAuthProvider, onAuthStateChanged, signInWithCredential, signInWithPopup, signInWithRedirect,
+  type User,
 } from 'firebase/auth'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
@@ -48,26 +48,19 @@ export function App() {
 function AuthGate() {
   const { auth, db } = useFirebase()
   const [user, setUser] = useState<User | null | undefined>(undefined)
-  // The account the cloud just turned away: FinTrack's data is private to one owner.
-  const [refused, setRefused] = useState<string | null>(null)
   useEffect(() => onAuthStateChanged(auth, setUser), [auth])
   const uid = user?.uid
-  const email = user?.email
   useEffect(() => {
     if (!uid) return
-    setRefused(null)
-    void store.start(db, uid, () => {
-      setRefused(email ?? 'That account')
-      void signOut(auth)
-    })
+    void store.start(db, uid)
     return () => store.stop()
-  }, [auth, db, uid, email])
+  }, [db, uid])
   if (user === undefined) return <Spinner />
-  if (!user) return <SignIn refused={refused} />
+  if (!user) return <SignIn />
   return <Shell user={user} />
 }
 
-function SignIn({ refused }: { refused: string | null }) {
+function SignIn() {
   const { auth, emulator } = useFirebase()
   const [error, setError] = useState<string | null>(null)
   useEffect(() => {
@@ -97,22 +90,14 @@ function SignIn({ refused }: { refused: string | null }) {
         <p>Your daily income and expenses, the same here as on your phone.</p>
         <button className="google-btn" onClick={signIn}><GoogleLogo />Continue with Google</button>
         {emulator && (
+          // The auth emulator accepts an unsigned Google token, so tests can sign in without a popup.
           <div style={{ marginTop: 12 }}>
-            <button className="btn text" onClick={() => emulatorOwner(auth).catch(e => setError(String(e)))}>
-              Sign in as the owner (emulator)
-            </button>
-            {/* The auth emulator accepts an unsigned Google token, so a stranger needs no popup either. */}
             <button className="btn text" onClick={() => signInWithCredential(auth, GoogleAuthProvider.credential(
-              JSON.stringify({ sub: 'stranger', email: 'stranger@fintrack.test', email_verified: true, name: 'Stranger' }),
+              JSON.stringify({ sub: 'test-user', email: 'test@fintrack.test', email_verified: true, name: 'Test User' }),
             )).catch(e => setError(String(e)))}>
-              Sign in as someone else (emulator)
+              Sign in as a test user (emulator)
             </button>
           </div>
-        )}
-        {refused && (
-          <p className="error-text small" style={{ marginTop: 16 }}>
-            {refused} can't use this FinTrack: it's private to its owner's Google account.
-          </p>
         )}
         {error && <p className="error-text small" style={{ marginTop: 16 }}>{error}</p>}
         <p className="small" style={{ marginTop: 28 }}>
@@ -122,20 +107,6 @@ function SignIn({ refused }: { refused: string | null }) {
       </div>
     </div>
   )
-}
-
-/**
- * The tests' owner account, whose fixed ID firestore.rules lets in. Only the
- * emulator's admin access ("Bearer owner") can create an account with a chosen ID;
- * if it already exists, that call fails and the sign-in just goes ahead.
- */
-async function emulatorOwner(auth: Auth) {
-  await fetch(`http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/projects/${auth.app.options.projectId}/accounts`, {
-    method: 'POST',
-    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ localId: 'fintrack-test-owner', email: 'owner@fintrack.test', password: 'secret-pass' }),
-  })
-  await signInWithEmailAndPassword(auth, 'owner@fintrack.test', 'secret-pass')
 }
 
 const NAV: { to: string; label: string; icon: IconName }[] = [

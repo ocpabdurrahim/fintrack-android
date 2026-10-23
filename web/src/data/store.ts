@@ -101,7 +101,6 @@ class DataStore {
   private listeners = new Set<() => void>()
   private cached: DataSnapshot | null = null
   private recurringTimer: ReturnType<typeof setInterval> | null = null
-  private onRefused: (() => void) | null = null
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
@@ -132,12 +131,10 @@ class DataStore {
     this.listeners.forEach(l => l())
   }
 
-  /** [onRefused] runs once if the cloud turns this account away (firestore.rules admit only the owner). */
-  async start(db: Firestore, uid: string, onRefused?: () => void) {
+  async start(db: Firestore, uid: string) {
     this.stop()
     this.db = db
     this.uid = uid
-    this.onRefused = onRefused ?? null
     await Promise.all(COLLECTIONS.map(name => this.listen(name)))
     this.unsubs.push(
       onSnapshot(doc(db, 'users', uid), snap => {
@@ -166,7 +163,6 @@ class DataStore {
     this.pending = 0
     this.db = null
     this.uid = null
-    this.onRefused = null
     this.changed()
   }
 
@@ -222,12 +218,6 @@ class DataStore {
   }
 
   private fail(err: unknown) {
-    if ((err as { code?: string }).code === 'permission-denied' && this.onRefused) {
-      const refused = this.onRefused
-      this.onRefused = null
-      refused()
-      return
-    }
     this.error = err instanceof Error ? err.message : String(err)
     this.changed()
   }
