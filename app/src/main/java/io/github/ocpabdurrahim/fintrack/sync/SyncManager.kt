@@ -13,6 +13,7 @@ import com.google.firebase.auth.auth
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.QuerySnapshot
@@ -52,6 +53,8 @@ data class SyncStatus(
     val pending: Int = 0,
     val lastSyncedAt: Long = 0,
     val error: String? = null,
+    /** The account the cloud just turned away (it is private to one owner); it was signed out again. */
+    val refusedEmail: String? = null,
 ) {
     enum class State { SIGNED_OUT, CONNECTING, SYNCING, UP_TO_DATE, ERROR }
 }
@@ -89,6 +92,7 @@ class SyncManager(
     private var currentUid: String? = null
     private val serverLoaded = MutableStateFlow(emptySet<String>())
     @Volatile private var lastRemoteCurrency: Currency? = null
+    @Volatile private var refusedEmail: String? = null
 
     fun start() {
         auth.addAuthStateListener { onUser(it.currentUser) }
@@ -108,11 +112,12 @@ class SyncManager(
         currentUid = uid
         session?.cancel()
         if (user == null || uid == null) {
-            _status.value = SyncStatus(lastSyncedAt = prefs.lastSyncedAt)
+            _status.value = SyncStatus(lastSyncedAt = prefs.lastSyncedAt, refusedEmail = refusedEmail)
             // Never synced: deletions have no one to tell, so drop their tombstones.
             if (!prefs.everSynced) scope.launch { tables.forEach { it.purgeTombstones() } }
             return
         }
+        refusedEmail = null
         _status.value = SyncStatus(state = SyncStatus.State.CONNECTING, email = user.email, lastSyncedAt = prefs.lastSyncedAt)
         session = scope.launch { runWithRetry(uid) }
     }
@@ -125,6 +130,13 @@ class SyncManager(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
+                if (e.isPermissionDenied()) {
+                    // firestore.rules only let the owner's account in. Sign this one out; the phone keeps its records.
+                    Log.w(TAG, "The cloud refused this account; signing it out", e)
+                    refusedEmail = auth.currentUser?.email ?: "That account"
+                    auth.signOut()
+                    return
+                }
                 Log.w(TAG, "Sync stopped; retrying in ${backoff / 1000}s", e)
                 _status.update { it.copy(state = SyncStatus.State.ERROR, error = e.message ?: e.javaClass.simpleName) }
                 delay(backoff)
@@ -290,6 +302,9 @@ class SyncManager(
         }
         awaitClose { registration.remove() }
     }
+
+    private fun Throwable.isPermissionDenied(): Boolean = generateSequence(this) { it.cause }
+        .any { it is FirebaseFirestoreException && it.code == FirebaseFirestoreException.Code.PERMISSION_DENIED }
 
     private fun DocumentSnapshot.updatedMillis(): Long = getTimestamp("updatedAt")?.toDate()?.time ?: 0L
 

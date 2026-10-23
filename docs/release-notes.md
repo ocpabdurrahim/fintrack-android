@@ -2,7 +2,10 @@ FinTrack is a daily income and expense tracker for Android, with a matching web 
 
 **Already have 1.1.0?** This version arrives by itself. Nothing to download.
 
-**Install:** download `FinTrack-1.1.1.apk` below on your phone and open it. If Android asks, allow "Install unknown apps" for your browser or file manager. It installs over any earlier version and keeps your data. Needs Android 8.0 or newer.
+**Install:** download `FinTrack-1.1.2.apk` below on your phone and open it. If Android asks, allow "Install unknown apps" for your browser or file manager. It installs over any earlier version and keeps your data. Needs Android 8.0 or newer.
+
+### New in 1.1.2
+- **The cloud is private to one Google account, the owner's.** Anyone else who signs in under **More → Sync** is signed out again with a short explanation, and their records stay on their phone. The web app does the same.
 
 ### New in 1.1.1
 - The line at the bottom of **More** now says whether your records sync with the web, instead of always saying they never leave the phone.
