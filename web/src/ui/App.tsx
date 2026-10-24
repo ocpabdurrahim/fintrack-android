@@ -60,9 +60,19 @@ function AuthGate() {
   return <Shell user={user} />
 }
 
+// Shown once on the sign-in page, e.g. after the account was deleted.
+let signInNotice: string | null = null
+export function setSignInNotice(text: string | null) {
+  signInNotice = text
+}
+
 function SignIn() {
   const { auth, emulator } = useFirebase()
   const [error, setError] = useState<string | null>(null)
+  const [notice] = useState(() => signInNotice)
+  useEffect(() => {
+    signInNotice = null
+  }, [])
   useEffect(() => {
     // Finishes a redirect sign-in; failures would otherwise be silent.
     getRedirectResult(auth).catch(e => setError(e instanceof Error ? e.message : String(e)))
@@ -99,6 +109,7 @@ function SignIn() {
             </button>
           </div>
         )}
+        {notice && <p className="small" style={{ marginTop: 16 }}>{notice}</p>}
         {error && <p className="error-text small" style={{ marginTop: 16 }}>{error}</p>}
         <p className="small" style={{ marginTop: 28 }}>
           Use the same Google account you signed in with in the Android app.

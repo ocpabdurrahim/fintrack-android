@@ -6,7 +6,8 @@
 // Writes update memory at once and reach Firestore in the background
 // (queued offline). See docs/sync-protocol.md for the shared format.
 import {
-  collection, doc, getDocsFromCache, onSnapshot, query, serverTimestamp, setDoc, Timestamp, where, writeBatch,
+  collection, deleteDoc, doc, getDocsFromCache, getDocsFromServer, onSnapshot, query, serverTimestamp, setDoc, Timestamp,
+  where, writeBatch,
   type DocumentData, type DocumentSnapshot, type Firestore, type Unsubscribe,
 } from 'firebase/firestore'
 import { useSyncExternalStore } from 'react'
@@ -124,6 +125,29 @@ class DataStore {
       }
     }
     return this.cached
+  }
+
+  /** Deletes every record this account has in the cloud; syncing stops first. */
+  async deleteCloudData() {
+    const db = this.db
+    const uid = this.uid
+    if (!db || !uid) throw new Error('Not signed in')
+    this.stop()
+    try {
+      for (const name of COLLECTIONS) {
+        const snap = await getDocsFromServer(collection(db, 'users', uid, name))
+        // Firestore allows up to 500 writes in one batch.
+        for (let i = 0; i < snap.docs.length; i += 400) {
+          const batch = writeBatch(db)
+          snap.docs.slice(i, i + 400).forEach(d => batch.delete(d.ref))
+          await batch.commit()
+        }
+      }
+      await deleteDoc(doc(db, 'users', uid))
+    } catch (e) {
+      void this.start(db, uid) // still signed in: carry on as before
+      throw e
+    }
   }
 
   private changed() {

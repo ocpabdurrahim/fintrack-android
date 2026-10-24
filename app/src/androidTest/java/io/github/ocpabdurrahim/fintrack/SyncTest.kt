@@ -15,6 +15,9 @@ import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.Rule
@@ -94,6 +97,30 @@ class SyncTest {
         // Currency picked on the web -> used on the phone.
         cloud.put("users/$uid", mapOf("currencyCode" to "USD", "currencySymbol" to "$", "grouping" to "INTERNATIONAL"))
         eventually("the web's currency is on the phone") { container.settings.settings.first().currencySymbol == "$" }
+    }
+
+    @Test
+    fun deletingTheAccountRemovesItsCloudRecords() = runBlocking {
+        val email = "delete-${System.nanoTime()}@fintrack.test"
+        Firebase.auth.createUserWithEmailAndPassword(email, "secret-pass").await()
+        val uid = Firebase.auth.currentUser!!.uid
+        val cloud = EmulatorRest(host, Firebase.app.options.projectId!!, uid)
+        val id = container.repository.saveTransaction(
+            TransactionEntity(
+                type = TxnType.EXPENSE, amount = 7_000, categoryId = "cat_food", accountId = "acc_cash",
+                date = System.currentTimeMillis(), note = "to be deleted",
+            )
+        )
+        eventually("the expense is in the cloud") { cloud.get("transactions", id) != null }
+
+        container.sync.deleteCloudDataAndAccount()
+
+        assertNull("signed out", Firebase.auth.currentUser)
+        assertNull("the expense is gone from the cloud", cloud.get("transactions", id))
+        assertNull("the starter categories are gone too", cloud.get("categories", "cat_food"))
+        assertEquals("the phone keeps its copy", "to be deleted", container.repository.getTransaction(id)?.note)
+        val signInAgain = runCatching { Firebase.auth.signInWithEmailAndPassword(email, "secret-pass").await() }
+        assertTrue("the account no longer exists", signInAgain.isFailure)
     }
 }
 

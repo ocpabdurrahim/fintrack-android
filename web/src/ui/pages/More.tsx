@@ -1,22 +1,25 @@
 import type { User } from 'firebase/auth'
-import { signOut } from 'firebase/auth'
+import { deleteUser, GoogleAuthProvider, reauthenticateWithPopup, signOut } from 'firebase/auth'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { buildBackup, buildCsv, download } from '../../data/export'
 import { store, useData } from '../../data/store'
 import { toDateInput } from '../../domain/dates'
 import { formatMoney, type Grouping } from '../../domain/money'
-import { useFirebase } from '../App'
-import { useToast } from '../common'
+import { setSignInNotice, useFirebase } from '../App'
+import { ConfirmDialog, useToast } from '../common'
 import { ChoiceDialog } from '../dialogs'
 import { Icon, type IconName } from '../icons'
 import { CURRENCIES, THEMES, useTheme, type ThemeMode } from '../preferences'
 
-type Dialog = 'currency' | 'grouping' | 'theme' | null
+type Dialog = 'currency' | 'grouping' | 'theme' | 'delete' | null
+
+/** Firebase only deletes an account that signed in during the last 5 minutes. */
+const RECENT_SIGN_IN = 4 * 60_000
 
 export function MorePage({ user }: { user: User }) {
   const data = useData()
-  const { auth } = useFirebase()
+  const { auth, db } = useFirebase()
   const navigate = useNavigate()
   const toast = useToast()
   const [theme, setTheme] = useTheme()
@@ -29,6 +32,35 @@ export function MorePage({ user }: { user: User }) {
     : data.pending > 0 ? `Saving ${data.pending} change${data.pending === 1 ? '' : 's'}…`
       : data.synced ? 'Up to date with your phone' : 'Connecting…'
   const syncColor = data.error ? 'var(--error)' : data.pending > 0 || !data.synced ? 'var(--warning)' : 'var(--income)'
+
+  const deleteAccount = async () => {
+    toast('Deleting your account…')
+    try {
+      if (!(Date.now() - Date.parse(user.metadata.lastSignInTime ?? '') < RECENT_SIGN_IN)) {
+        await reauthenticateWithPopup(user, new GoogleAuthProvider())
+      }
+    } catch (e) {
+      const code = (e as { code?: string }).code
+      toast(code === 'auth/user-mismatch'
+        ? "Pick the Google account you're signed in with. Nothing was deleted."
+        : 'Nothing was deleted')
+      return
+    }
+    try {
+      await store.deleteCloudData()
+    } catch (e) {
+      toast(`Couldn't delete your records: ${e instanceof Error ? e.message : String(e)}`)
+      return
+    }
+    setSignInNotice('Your FinTrack account and all its records were deleted.')
+    try {
+      await deleteUser(user) // signs this tab out
+    } catch (e) {
+      setSignInNotice(null)
+      void store.start(db, user.uid)
+      toast(`Your records were deleted, but the account wasn't: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
 
   return (
     <div className="page">
@@ -53,6 +85,7 @@ export function MorePage({ user }: { user: User }) {
               </div>
             </div>
             <Row icon="logout" title="Sign out" subtitle="Your data stays in your account and on your phone" onClick={() => signOut(auth)} />
+            <Row icon="trash" title="Delete account and data" subtitle="Removes your FinTrack account and every record in it" onClick={() => setDialog('delete')} />
           </Group>
 
           <Group title="Manage">
@@ -99,6 +132,14 @@ export function MorePage({ user }: { user: User }) {
           title="Number format" value={s.grouping}
           options={(['SOUTH_ASIAN', 'INTERNATIONAL'] as Grouping[]).map(g => ({ value: g, label: formatMoney(123456700, s.currencySymbol, g) }))}
           onPick={grouping => store.setSettings({ ...s, grouping })}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'delete' && (
+        <ConfirmDialog
+          title="Delete your account?" danger confirm="Delete"
+          text={`${user.email ?? 'Your account'} and every record in it will be deleted, here and in the cloud. Phones that synced keep their own copy until you erase it there. This can't be undone.`}
+          onConfirm={() => void deleteAccount()}
           onClose={() => setDialog(null)}
         />
       )}

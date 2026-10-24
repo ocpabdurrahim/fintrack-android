@@ -26,6 +26,7 @@ import io.github.ocpabdurrahim.fintrack.domain.Grouping
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -101,6 +102,46 @@ class SyncManager(
 
     /** Stops syncing. Everything stays on the phone and in the cloud. */
     fun signOut() = auth.signOut()
+
+    /**
+     * Deletes this account's records from the cloud, then the account itself,
+     * which also signs this phone out. The phone's own records are untouched.
+     * Firebase only deletes an account that signed in during the last few
+     * minutes, so after longer than that Google is asked to confirm it first.
+     */
+    suspend fun deleteAccount(activity: Activity) {
+        val user = auth.currentUser ?: return
+        val lastSignIn = user.metadata?.lastSignInTimestamp ?: 0L
+        if (System.currentTimeMillis() - lastSignIn > RECENT_SIGN_IN) {
+            val token = GoogleSignIn.idToken(activity)
+            user.reauthenticate(GoogleAuthProvider.getCredential(token, null)).await()
+        }
+        deleteCloudDataAndAccount()
+    }
+
+    /** [deleteAccount] without the Google confirmation; the tests call it directly. */
+    suspend fun deleteCloudDataAndAccount() {
+        val user = auth.currentUser ?: return
+        val uid = user.uid
+        // Stop syncing first, so nothing is uploaded again while the records go.
+        session?.cancelAndJoin()
+        try {
+            for (table in tables) {
+                val docs = collection(uid, table.name).get(Source.SERVER).await().documents
+                for (chunk in docs.chunked(BATCH_SIZE)) {
+                    val batch = firestore.batch()
+                    chunk.forEach { batch.delete(it.reference) }
+                    batch.commit().await()
+                }
+            }
+            userDoc(uid).delete().await()
+            user.delete().await()
+        } catch (e: Exception) {
+            // Still signed in: carry on syncing as before.
+            if (auth.currentUser?.uid == uid) session = scope.launch { runWithRetry(uid) }
+            throw e
+        }
+    }
 
     private fun onUser(user: FirebaseUser?) {
         val uid = user?.uid
@@ -295,5 +336,9 @@ class SyncManager(
 
     private companion object {
         const val TAG = "FinTrackSync"
+        /** Firebase wants a sign-in within the last 5 minutes before deleting an account. */
+        const val RECENT_SIGN_IN = 4 * 60_000L
+        /** Firestore allows up to 500 writes in one batch. */
+        const val BATCH_SIZE = 400
     }
 }

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -51,6 +52,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -233,6 +235,23 @@ class MoreViewModel(private val c: AppContainer) : ViewModel() {
         say("Signed out. Your data stays on this phone.")
     }
 
+    fun deleteAccount(activity: Activity, alsoErasePhone: Boolean) {
+        viewModelScope.launch {
+            try {
+                say("Deleting your account…")
+                c.sync.deleteAccount(activity)
+                if (alsoErasePhone) c.repository.resetAll()
+                say(if (alsoErasePhone) "Your account and all your records were deleted" else "Your account and cloud records were deleted. This phone keeps its copy.")
+            } catch (e: GoogleSignIn.Cancelled) {
+                say("Nothing was deleted")
+            } catch (e: com.google.firebase.auth.FirebaseAuthInvalidUserException) {
+                say("Pick the Google account you're signed in with. Nothing was deleted.")
+            } catch (e: Exception) {
+                say("Couldn't delete the account: ${e.message ?: e.javaClass.simpleName}")
+            }
+        }
+    }
+
     fun exportJson(uri: Uri) = runFileTask("Backup failed") {
         val n = c.backup.exportJson(uri)
         say("Backup saved ($n transactions)")
@@ -269,7 +288,7 @@ class MoreViewModel(private val c: AppContainer) : ViewModel() {
 private val timeFormat = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
 private fun formatTime(hour: Int, minute: Int): String = LocalTime.of(hour, minute).format(timeFormat)
 
-private enum class MoreDialog { CURRENCY, GROUPING, THEME, PIN, REMINDER_TIME, RESTORE_CONFIRM, ERASE, SIGN_OUT }
+private enum class MoreDialog { CURRENCY, GROUPING, THEME, PIN, REMINDER_TIME, RESTORE_CONFIRM, ERASE, SIGN_OUT, DELETE_ACCOUNT }
 
 @Composable
 fun MoreScreen(onOpen: (String) -> Unit) {
@@ -365,6 +384,15 @@ fun MoreScreen(onOpen: (String) -> Unit) {
                         "Sign out",
                         "Stops syncing; your data stays on this phone",
                         onClick = { dialog = MoreDialog.SIGN_OUT },
+                    )
+                }
+                item {
+                    SettingRow(
+                        Icons.Filled.DeleteForever,
+                        "Delete account and cloud data",
+                        "Removes your FinTrack account and every record stored online",
+                        onClick = { dialog = MoreDialog.DELETE_ACCOUNT },
+                        tag = "delete_account",
                     )
                 }
             }
@@ -620,6 +648,14 @@ fun MoreScreen(onOpen: (String) -> Unit) {
             },
             onDismiss = { dialog = null },
         )
+        MoreDialog.DELETE_ACCOUNT -> DeleteAccountDialog(
+            email = sync.email,
+            onConfirm = { alsoErasePhone ->
+                context.findActivity()?.let { vm.deleteAccount(it, alsoErasePhone) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
         MoreDialog.ERASE -> ConfirmDialog(
             title = "Erase all data?",
             text = "Every transaction, account, category, budget and recurring entry will be deleted. This can't be undone.",
@@ -632,6 +668,39 @@ fun MoreScreen(onOpen: (String) -> Unit) {
             onDismiss = { dialog = null },
         )
     }
+}
+
+@Composable
+private fun DeleteAccountDialog(email: String?, onConfirm: (alsoErasePhone: Boolean) -> Unit, onDismiss: () -> Unit) {
+    var erasePhone by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete your account?") },
+        text = {
+            Column {
+                Text(
+                    "${email ?: "Your account"} and every record stored in FinTrack's cloud will be deleted, " +
+                        "on the web and on any other phone. This can't be undone."
+                )
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { erasePhone = !erasePhone },
+                ) {
+                    Checkbox(checked = erasePhone, onCheckedChange = { erasePhone = it })
+                    Text("Also erase the records on this phone")
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(erasePhone) }, modifier = Modifier.testTag("confirm_button")) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable
