@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore'
 import { useSyncExternalStore } from 'react'
 import { occurrence } from '../domain/recurrence'
-import { DEFAULT_ACCOUNTS, DEFAULT_CATEGORIES } from './defaults'
+import { compareCategories, DEFAULT_ACCOUNTS, DEFAULT_CATEGORIES } from './defaults'
 import { occurrenceId } from './ids'
 import {
   COLLECTIONS, DEFAULT_CURRENCY,
@@ -117,7 +117,7 @@ class DataStore {
         pending: this.pending,
         error: this.error,
         accounts: [...m.accounts.values()].sort((a, b) => Number(a.archived) - Number(b.archived) || a.sortOrder - b.sortOrder || byName(a, b)),
-        categories: [...m.categories.values()].sort((a, b) => a.type.localeCompare(b.type) || a.sortOrder - b.sortOrder || byName(a, b)),
+        categories: [...m.categories.values()].sort(compareCategories),
         transactions: [...m.transactions.values()].sort((a, b) => b.date - a.date || b.createdAt - a.createdAt),
         budgets: [...m.budgets.values()],
         recurring: [...m.recurring.values()].sort((a, b) => Number(b.active) - Number(a.active) || a.startDate - b.startDate),

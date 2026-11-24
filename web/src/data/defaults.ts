@@ -5,6 +5,15 @@ import type { Account, Category } from './types'
 
 const argb = (hex: number) => hex | 0
 
+const OTHER_CATEGORIES = new Set(['cat_other', 'cat_other_income'])
+
+/** A to Z within each type, with the starter "Other" catch-alls last (as in the Android app's CategoryDao). */
+export function compareCategories(a: Category, b: Category): number {
+  return a.type.localeCompare(b.type)
+    || Number(OTHER_CATEGORIES.has(a.id)) - Number(OTHER_CATEGORIES.has(b.id))
+    || a.name.localeCompare(b.name)
+}
+
 export const PALETTE: number[] = [
   0xffe57373, 0xfff06292, 0xffba68c8, 0xff9575cd, 0xff7986cb, 0xff64b5f6, 0xff4fc3f7, 0xff4dd0e1,
   0xff4db6ac, 0xff81c784, 0xffaed581, 0xffffd54f, 0xffffb74d, 0xffff8a65, 0xffa1887f, 0xff90a4ae,

@@ -4,7 +4,7 @@ import { amountToInput, compactMoney, formatMoney, parseAmount, sanitizeAmount }
 import { occurrence } from './recurrence'
 import { byCategory, dailyAverage, dailyTotals, totalsOf } from './stats'
 import { newId, occurrenceId } from '../data/ids'
-import { cssColor, DEFAULT_CATEGORIES } from '../data/defaults'
+import { compareCategories, cssColor, DEFAULT_CATEGORIES } from '../data/defaults'
 import type { Txn, TxnType } from '../data/types'
 
 describe('money', () => {
@@ -126,5 +126,18 @@ describe('ids and defaults', () => {
     const food = DEFAULT_CATEGORIES.find(c => c.id === 'cat_food')!
     expect(food.color).toBe(0xffffb74d | 0)
     expect(cssColor(food.color)).toBe('rgb(255, 183, 77)')
+  })
+})
+
+describe('categories', () => {
+  it('sort A to Z within each type, with Other last', () => {
+    const extra = { ...DEFAULT_CATEGORIES[0], id: 'c-new', name: 'Apples' }
+    const sorted = [extra, ...DEFAULT_CATEGORIES].sort(compareCategories)
+    for (const [type, other] of [['EXPENSE', 'Other'], ['INCOME', 'Other Income']] as const) {
+      const names = sorted.filter(c => c.type === type).map(c => c.name)
+      expect(names[names.length - 1]).toBe(other)
+      expect(names.slice(0, -1)).toEqual([...names.slice(0, -1)].sort((a, b) => a.localeCompare(b)))
+    }
+    expect(sorted.find(c => c.type === 'EXPENSE')?.name).toBe('Apples')
   })
 })

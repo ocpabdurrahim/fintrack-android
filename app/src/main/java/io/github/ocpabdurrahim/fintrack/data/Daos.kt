@@ -53,12 +53,15 @@ interface AccountDao {
     suspend fun purgeTombstones()
 }
 
+private const val OTHER_LAST = "id IN ('cat_other', 'cat_other_income')"
+
 @Dao
 interface CategoryDao {
-    @Query("SELECT * FROM categories WHERE deleted = 0 ORDER BY archived, type, sortOrder, name")
+    // A to Z within each type, with the starter "Other" catch-alls last (web: compareCategories).
+    @Query("SELECT * FROM categories WHERE deleted = 0 ORDER BY archived, type, $OTHER_LAST, name COLLATE NOCASE")
     fun observeAll(): Flow<List<CategoryEntity>>
 
-    @Query("SELECT * FROM categories WHERE deleted = 0 ORDER BY type, sortOrder, name")
+    @Query("SELECT * FROM categories WHERE deleted = 0 ORDER BY type, $OTHER_LAST, name COLLATE NOCASE")
     suspend fun getAll(): List<CategoryEntity>
 
     @Query("SELECT * FROM categories WHERE id = :id")

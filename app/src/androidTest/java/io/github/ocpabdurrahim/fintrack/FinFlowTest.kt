@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import io.github.ocpabdurrahim.fintrack.data.TxnType
 import io.github.ocpabdurrahim.fintrack.domain.Pin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -37,6 +38,16 @@ class FinFlowTest {
         if (categoryTag != null) compose.onNodeWithTag(categoryTag).performClick()
         compose.onNodeWithTag("save_button").performClick()
         compose.waitForTag("fab_add")
+    }
+
+    @Test
+    fun categoriesAreSortedAToZWithOtherLast() = runBlocking {
+        val categories = container.database.categoryDao().observeAll().first()
+        for ((type, other) in listOf(TxnType.EXPENSE to "Other", TxnType.INCOME to "Other Income")) {
+            val names = categories.filter { it.type == type }.map { it.name }
+            assertEquals(other, names.last())
+            assertEquals(names.dropLast(1).sortedBy { it.lowercase() }, names.dropLast(1))
+        }
     }
 
     @Test
