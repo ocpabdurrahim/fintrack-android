@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.ocpabdurrahim.fintrack.data.TxnType
@@ -35,7 +36,8 @@ class FinFlowTest {
         compose.onNodeWithTag(openWith).performClick()
         compose.waitForTag("amount_input")
         compose.onNodeWithTag("amount_input").performTextInput(amount)
-        if (categoryTag != null) compose.onNodeWithTag(categoryTag).performClick()
+        // Categories are A to Z, so the one we want may be below the fold.
+        if (categoryTag != null) compose.onNodeWithTag(categoryTag).performScrollTo().performClick()
         compose.onNodeWithTag("save_button").performClick()
         compose.waitForTag("fab_add")
     }
